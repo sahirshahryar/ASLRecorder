@@ -12,16 +12,16 @@ sign language recognition models.
   - [x] Automatically label recordings by the word shown at the top of the UI
 - [ ] Actual list of words!
 - [ ] Dynamic device compatibility (query device capabilities instead of assuming them)
-  - [ ] Fetch camera list
+  - [x] Fetch camera list
   - [ ] Set video quality to selected camera's resolution
-- [ ] Check permissions and ask if not granted
+- [x] Check permissions and ask if not granted - **currently shows instructions but not prompt**
 - [ ] Test and tweak haptic feedback
 - [ ] UI Improvements
   - [ ] Home page, tutorial?
   - [ ] **Option to delete a botched recording** (better for us too!)
 - [ ] Persistence? (Store which signs users have already recorded so they don't need to re-record)
 - [ ] Multitasking support (current version may crash on exit/reopen)
-- [ ] Easy access to video files (upload? direct file browser?)
+- [x] Easy access to video files (upload? direct file browser?)
 
 
 

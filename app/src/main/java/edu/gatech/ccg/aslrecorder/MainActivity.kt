@@ -1,33 +1,36 @@
 package edu.gatech.ccg.aslrecorder
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.hardware.camera2.*
 import android.media.MediaCodec
 import android.media.MediaRecorder
-import android.os.Build
+import android.net.Uri
+import android.os.*
+import android.provider.MediaStore
 import androidx.appcompat.app.AppCompatActivity
-import android.os.Bundle
-import android.os.Handler
-import android.os.HandlerThread
 import android.util.Log
 import android.util.Range
 import android.view.*
-import android.widget.Button
-import androidx.annotation.RequiresApi
 import androidx.camera.core.CameraSelector
-import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.BufferedInputStream
 
 import java.io.File
+import java.io.FileInputStream
 import java.lang.IllegalStateException
 import java.text.SimpleDateFormat
 import java.util.*
@@ -79,11 +82,12 @@ class MainActivity : AppCompatActivity() {
 
 
     /**
-     * CODE BORROWED FROM THE Android Open Source Project (AOSP), LICENSED UNDER THE
+     * SUBSTANTIAL PORTIONS OF THE BELOW CODE BELOW ARE BORROWED
+     * from the Android Open Source Project (AOSP), WHICH IS LICENSED UNDER THE
      * Apache 2.0 LICENSE (https://www.apache.org/licenses/LICENSE-2.0). (c) 2020 AOSP.
      *
-     * SEE https://github.com/android/camera-samples/blob/master/Camera2Video/app/src/main/java/com/
-     *     example/android/camera2/video/fragments/CameraFragment.kt
+     * SEE https://github.com/android/camera-samples/blob/master/Camera2Video/app/
+     *     src/main/java/com/example/android/camera2/video/fragments/CameraFragment.kt
      */
 
     private lateinit var camera: CameraDevice
@@ -99,9 +103,9 @@ class MainActivity : AppCompatActivity() {
         context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     }
 
-    private val outputFile: File by lazy {
-        createFile(this)
-    }
+//    private val outputFile: File by lazy {
+//        createFile(this)
+//    }
 
     private lateinit var previewSurface: Surface
 
@@ -119,161 +123,169 @@ class MainActivity : AppCompatActivity() {
         }.build()
     }
 
+    private lateinit var outputFile: File
+
     private val recordingSurface: Surface by lazy {
+        createRecordingSurface()
+    }
+
+    private val recorder: MediaRecorder by lazy {
+        MediaRecorder()
+    }
+
+    private var recordingStartMillis: Long = 0L
+
+    private fun createRecordingSurface(): Surface {
         val surface = MediaCodec.createPersistentInputSurface()
-        createRecorder(surface).apply {
+        val recorder = MediaRecorder()
+        prepareRecorder(recorder, surface).apply {
             prepare()
             release()
         }
 
-        surface
+        return surface
     }
 
-    private val recorder: MediaRecorder by lazy { createRecorder(recordingSurface) }
-
-    private var recordingStartMillis: Long = 0L
-
-    private fun createRecorder(surface: Surface) = MediaRecorder().apply {
-        // TODO: Is recording audio necessary?
-        // setAudioSource(MediaRecorder.AudioSource.MIC)
+    private fun prepareRecorder(rec: MediaRecorder, surface: Surface)
+            = rec.apply {
         setVideoSource(MediaRecorder.VideoSource.SURFACE)
         setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         setOutputFile(outputFile.absolutePath)
         setVideoEncodingBitRate(RECORDER_VIDEO_BITRATE)
-        // if (args.fps > 0) setVideoFrameRate(args.fps)
+        setVideoFrameRate(30)
 
         // TODO: Device-specific!
         setVideoSize(1920, 1080)
         setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-        // setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
         setInputSurface(surface)
     }
 
     companion object {
         private val TAG = MainActivity::class.java.simpleName
 
-        private const val RECORDER_VIDEO_BITRATE: Int = 10_000_000
+        private const val RECORDER_VIDEO_BITRATE: Int = 15_000_000
         private const val MIN_REQUIRED_RECORDING_TIME_MILLIS: Long = 1000L
 
         /** Creates a [File] named with the current date and time */
         private fun createFile(activity: MainActivity): File {
             val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss", Locale.US)
             val currentWord = activity.currentWord
-            return File(activity.applicationContext.filesDir,
+            return File(Environment.getExternalStorageDirectory(),
                 "${currentWord}-${sdf.format(Date())}.mp4")
         }
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun initializeCamera() = lifecycleScope.launch(Dispatchers.Main) {
+        // Test camera permission
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
+            || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+               PackageManager.PERMISSION_GRANTED) {
+
+            val errorRoot = findViewById<ConstraintLayout>(R.id.main_root)
+            val errorMessage = layoutInflater.inflate(R.layout.permission_error, errorRoot, false)
+            errorRoot.addView(errorMessage)
+
+            // Dim Record button?
+            recordButton.backgroundTintList = ColorStateList.valueOf(0xFFFA9389.toInt())
+        } else {
+            val manager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            var cameraId = ""
+
+            for (id in manager.cameraIdList) {
+                val face = manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)
+                if (face == CameraSelector.LENS_FACING_FRONT) {
+                    cameraId = id
+                    break
+                }
+            }
+
+            if (cameraId == "") {
+                throw IllegalStateException("No front camera available")
+            }
+
+            camera = openCamera(cameraManager, cameraId, cameraHandler)
+
+            val targets = listOf(previewSurface, recordingSurface)
+            session = createCaptureSession(camera, targets, cameraHandler)
+            session.setRepeatingRequest(previewRequest, null, cameraHandler)
+
+            // React to user touching the capture button
+            recordButton.setOnTouchListener { view, event ->
+                when (event.action) {
+
+                    MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
+
+                        // Prevents screen rotation during the video recording
+                        this@MainActivity.requestedOrientation =
+                            ActivityInfo.SCREEN_ORIENTATION_LOCKED
+
+                        // Start recording repeating requests, which will stop the ongoing preview
+                        //  repeating requests without having to explicitly call
+                        //  `session.stopRepeating`
+                        session.setRepeatingRequest(recordRequest, null, cameraHandler)
+
+                        prepareRecorder(recorder, recordingSurface)
+
+                        // Finalizes recorder setup and starts recording
+                        recorder.apply {
+                            // For now, actually reading the device orientation is unnecessary
+                            setOrientationHint(270)
+                            prepare()
+                            start()
+                        }
+                        recordingStartMillis = System.currentTimeMillis()
+                        Log.d(TAG, "Recording started")
+
+                        // Starts recording animation
+                        // fragmentCameraBinding.overlay.post(animationTask)
+
+                        // Send recording started haptic
+                        delay(100)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
+                        } else {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        }
+                    }
+
+                    MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {
+
+                        // Unlocks screen rotation after recording finished
+                        // requireActivity().requestedOrientation =
+                        //    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+
+                        // Requires recording of at least MIN_REQUIRED_RECORDING_TIME_MILLIS
+                        val elapsedTimeMillis = System.currentTimeMillis() - recordingStartMillis
+                        if (elapsedTimeMillis < MIN_REQUIRED_RECORDING_TIME_MILLIS) {
+                            delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
+                        }
+
+                        Log.d(TAG, "Recording stopped. Check " +
+                                this@MainActivity.getExternalFilesDir(null)?.absolutePath
+                        )
+                        recorder.stop()
+
+                        copyFileToDownloads(this@MainActivity, outputFile)
+                        outputFile = createFile(this@MainActivity)
+
+                        // Send a haptic feedback on recording end
+                        delay(100)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
+                        } else {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        }
+                    }
+                }
+
+                true
+            }
+        }
+
+
         // TODO: Determine `cameraId`'s value
-        val manager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
-        var cameraId = ""
 
-        for (id in manager.cameraIdList) {
-            val face = manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)
-            if (face == CameraSelector.LENS_FACING_FRONT) {
-                cameraId = id
-                break
-            }
-        }
-
-        if (cameraId == "") {
-            throw IllegalStateException("No front camera available")
-        }
-
-        camera = openCamera(cameraManager, cameraId, cameraHandler)
-
-        val targets = listOf(/* fragmentCameraBinding.viewFinder.holder.surface, */
-            previewSurface, recordingSurface)
-        session = createCaptureSession(camera, targets, cameraHandler)
-        session.setRepeatingRequest(previewRequest, null, cameraHandler)
-
-        // React to user touching the capture button
-        recordButton.setOnTouchListener { view, event ->
-            when (event.action) {
-
-                MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
-
-                    // Prevents screen rotation during the video recording
-                    this@MainActivity.requestedOrientation =
-                        ActivityInfo.SCREEN_ORIENTATION_LOCKED
-
-                    // Start recording repeating requests, which will stop the ongoing preview
-                    //  repeating requests without having to explicitly call `session.stopRepeating`
-                    session.setRepeatingRequest(recordRequest, null, cameraHandler)
-
-                    // Finalizes recorder setup and starts recording
-                    recorder.apply {
-                        // Sets output orientation based on current sensor value at start time
-                        // relativeOrientation.value?.let { setOrientationHint(it) }
-                        prepare()
-                        start()
-                    }
-                    recordingStartMillis = System.currentTimeMillis()
-                    Log.d(TAG, "Recording started")
-
-                    // Starts recording animation
-                    // fragmentCameraBinding.overlay.post(animationTask)
-
-                    // Send recording started haptic
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        delay(100)
-                        view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
-                    }
-                }
-
-                MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {
-
-                    // Unlocks screen rotation after recording finished
-                    // requireActivity().requestedOrientation =
-                    //    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-
-                    // Requires recording of at least MIN_REQUIRED_RECORDING_TIME_MILLIS
-                    val elapsedTimeMillis = System.currentTimeMillis() - recordingStartMillis
-                    if (elapsedTimeMillis < MIN_REQUIRED_RECORDING_TIME_MILLIS) {
-                        delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
-                    }
-
-                    Log.d(TAG, "Recording stopped. Output file: $outputFile")
-                    recorder.stop()
-
-                    // TODO: Don't delete the code below just yet. I'm not sure whether errors
-                    //   were occurring due to GPU-based rendering or due to an actual
-                    //   error in the code.
-
-                    // Removes recording animation
-                    // fragmentCameraBinding.overlay.removeCallbacks(animationTask)
-
-                    // Broadcasts the media file to the rest of the system
-//                    MediaScannerConnection.scanFile(
-//                        view.context, arrayOf(outputFile.absolutePath), null, null)
-//
-//                    // Launch external activity via intent to play video recorded using our provider
-//                    startActivity(Intent().apply {
-//                        action = Intent.ACTION_VIEW
-//                        type = MimeTypeMap.getSingleton()
-//                            .getMimeTypeFromExtension(outputFile.extension)
-//                        val authority = "${BuildConfig.APPLICATION_ID}.provider"
-//                        data = FileProvider.getUriForFile(view.context, authority, outputFile)
-//                        flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-//                                Intent.FLAG_ACTIVITY_CLEAR_TOP
-                    // })
-
-                    // Finishes our current camera screen
-                    // navController.popBackStack()
-
-                    // Send a haptic feedback on recording end
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        delay(100)
-                        view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
-                    }
-
-                }
-            }
-
-            true
-        }
     }
 
     @SuppressLint("MissingPermission")
@@ -329,32 +341,21 @@ class MainActivity : AppCompatActivity() {
      * END BORROWED CODE FROM AOSP.
      */
 
-    private fun acquirePreviewSurface() {
-
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        outputFile = createFile(this)
+
         // Set title bar text
-        // actionBar?.title = "Please hold the button and record..."
+        title = "Please hold the button and record..."
 
         // Set up view pager
         wordPager = findViewById(R.id.wordPager)
 
-//        val wordsInputStream = resources.openRawResource(resources.getIdentifier("words",
-//                                                 "values", packageName))
-//        val wordList = ArrayList<String>()
-//        wordsInputStream.bufferedReader().useLines { lines -> lines.forEach { wordList.add(it) } }
-
         val wordArray = resources.getStringArray(R.array.words)
         wordList = ArrayList(listOf(*wordArray))
         currentWord = wordList[0]
-
-        for (word in wordList) {
-            Log.d("D", "Word $word")
-        }
 
         wordPager.adapter = WordPagerAdapter(this, wordList)
         wordPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
@@ -362,17 +363,12 @@ class MainActivity : AppCompatActivity() {
                 super.onPageSelected(position)
 
                 this@MainActivity.currentWord = wordList[position]
+                this@MainActivity.outputFile = createFile(this@MainActivity)
             }
         })
 
         cameraView = findViewById(R.id.cameraPreview)
         recordButton = findViewById(R.id.recordButton)
-
-//        cameraProviderLF = ProcessCameraProvider.getInstance(this)
-//        cameraProviderLF.addListener({
-//            val cameraProvider = cameraProviderLF.get()
-//            bindCameraPreview(cameraProvider)
-//        }, ContextCompat.getMainExecutor(this))
 
         cameraView.holder.addCallback(object: SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
@@ -396,31 +392,46 @@ class MainActivity : AppCompatActivity() {
             }
 
         })
-        // initializeCamera()
     }
 
-    fun getCamera(): CameraSelector {
-        return CameraSelector.Builder()
-            .requireLensFacing(
-                if (useBackCamera) CameraSelector.LENS_FACING_BACK
-                else CameraSelector.LENS_FACING_FRONT
-            )
-            .build()
+
+    private val DOWNLOAD_DIR = Environment
+        .getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+
+    // val finalUri : Uri? = copyFileToDownloads(context, downloadedFile)
+
+    /**
+     * THE CODE BELOW IS COPIED FROM Rubén Viguera at StackOverflow (CC-BY-SA 4.0).
+     * See https://stackoverflow.com/a/64357198/13206041.
+     */
+    fun copyFileToDownloads(context: Context, downloadedFile: File): Uri? {
+        val resolver = context.contentResolver
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, downloadedFile.name)
+                // put(MediaStore.MediaColumns.MIME_TYPE, getMimeType(downloadedFile))
+                put(MediaStore.MediaColumns.SIZE, downloadedFile.length())
+            }
+            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+        } else {
+            val authority = "${context.packageName}.provider"
+            val destinyFile = File(DOWNLOAD_DIR, downloadedFile.name)
+            FileProvider.getUriForFile(context, authority, destinyFile)
+        }?.also { downloadedUri ->
+            resolver.openOutputStream(downloadedUri).use { outputStream ->
+                val brr = ByteArray(1024)
+                var len: Int
+                val bufferedInputStream = BufferedInputStream(FileInputStream(downloadedFile.absoluteFile))
+                while ((bufferedInputStream.read(brr, 0, brr.size).also { len = it }) != -1) {
+                    outputStream?.write(brr, 0, len)
+                }
+                outputStream?.flush()
+                bufferedInputStream.close()
+            }
+        }
     }
-
-    fun beginRecording() {
-        // Start video recording
-
-
-        // Send haptic feedback (single tap) to confirm recording has ended
-    }
-
-    fun endRecording() {
-        // End recording
-
-        // Send haptic feedback (double tap) to confirm recording has finished
-
-        // Save file
-    }
+    /**
+     * End borrowed code from Rubén Viguera.
+     */
 
 }
