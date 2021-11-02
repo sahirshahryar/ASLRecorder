@@ -7,17 +7,26 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <view
-        android:id="@+id/cameraPreview"
-        class="android.view.SurfaceView"
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/aspectRatioConstraint"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintDimensionRatio="H,3:4"
+        app:layout_constraintEnd_toEndOf="@+id/wordPager"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="1.0" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <view
+            android:id="@+id/cameraPreview"
+            class="android.view.SurfaceView"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.54"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/wordPager"
@@ -34,15 +43,17 @@
         android:id="@+id/recordButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="23dp"
         android:layout_marginBottom="90dp"
         android:backgroundTint="#F80000"
         android:clickable="true"
         android:scaleX="2"
         android:scaleY="2"
         app:borderWidth="0dp"
-        app:layout_constraintBottom_toBottomOf="@+id/cameraPreview"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/aspectRatioConstraint"
         app:srcCompat="@drawable/record"
         app:tint="@android:color/white" />
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -92,9 +92,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var camera: CameraDevice
 
-    private val cameraThread = HandlerThread("CameraThread").apply { start() }
+    private lateinit var cameraThread: HandlerThread
 
-    private val cameraHandler = Handler(cameraThread.looper)
+    private lateinit var cameraHandler: Handler
 
     private lateinit var session: CameraCaptureSession
 
@@ -107,31 +107,17 @@ class MainActivity : AppCompatActivity() {
 //        createFile(this)
 //    }
 
-    private lateinit var previewSurface: Surface
+    private var previewSurface: Surface? = null
 
-    private val previewRequest: CaptureRequest by lazy {
-        session.device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
-            addTarget(previewSurface)
-        }.build()
-    }
+    private lateinit var previewRequest: CaptureRequest
 
-    private val recordRequest: CaptureRequest by lazy {
-        session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-            addTarget(previewSurface)
-            addTarget(recordingSurface)
-            set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(30, 30))
-        }.build()
-    }
+    private lateinit var recordRequest: CaptureRequest
 
     private lateinit var outputFile: File
 
-    private val recordingSurface: Surface by lazy {
-        createRecordingSurface()
-    }
+    private lateinit var recordingSurface: Surface
 
-    private val recorder: MediaRecorder by lazy {
-        MediaRecorder()
-    }
+    private lateinit var recorder: MediaRecorder
 
     private var recordingStartMillis: Long = 0L
 
@@ -170,7 +156,7 @@ class MainActivity : AppCompatActivity() {
         private fun createFile(activity: MainActivity): File {
             val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss", Locale.US)
             val currentWord = activity.currentWord
-            return File(Environment.getExternalStorageDirectory(),
+            return File(activity.applicationContext.filesDir,
                 "${currentWord}-${sdf.format(Date())}.mp4")
         }
     }
@@ -204,16 +190,21 @@ class MainActivity : AppCompatActivity() {
                 throw IllegalStateException("No front camera available")
             }
 
+            // TODO: Adjust aspect ratio to 16:9 so it matches recording
             camera = openCamera(cameraManager, cameraId, cameraHandler)
 
-            val targets = listOf(previewSurface, recordingSurface)
+            val targets = listOf(previewSurface!!, recordingSurface)
             session = createCaptureSession(camera, targets, cameraHandler)
-            session.setRepeatingRequest(previewRequest, null, cameraHandler)
+
+            previewRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
+                previewSurface?.let { addTarget(it) }
+            }.build()
+
+            session.setRepeatingRequest(previewRequest, null, /* cameraHandler */ null)
 
             // React to user touching the capture button
             recordButton.setOnTouchListener { view, event ->
                 when (event.action) {
-
                     MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
 
                         // Prevents screen rotation during the video recording
@@ -223,6 +214,15 @@ class MainActivity : AppCompatActivity() {
                         // Start recording repeating requests, which will stop the ongoing preview
                         //  repeating requests without having to explicitly call
                         //  `session.stopRepeating`
+                        recordRequest = session.device.createCaptureRequest(
+                            CameraDevice.TEMPLATE_RECORD).apply {
+                                previewSurface?.let { addTarget(it) }
+                                addTarget(recordingSurface)
+
+                                set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+                                    Range(30, 30))
+                            }.build()
+
                         session.setRepeatingRequest(recordRequest, null, cameraHandler)
 
                         prepareRecorder(recorder, recordingSurface)
@@ -241,11 +241,14 @@ class MainActivity : AppCompatActivity() {
                         // fragmentCameraBinding.overlay.post(animationTask)
 
                         // Send recording started haptic
-                        delay(100)
+                        // delay(100)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
+                            Log.d(TAG, "Requesting haptic feedback (R+)")
+                            recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                         } else {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            Log.d(TAG, "Requesting haptic feedback (R-)")
+                            recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
+                            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
                         }
                     }
 
@@ -270,11 +273,13 @@ class MainActivity : AppCompatActivity() {
                         outputFile = createFile(this@MainActivity)
 
                         // Send a haptic feedback on recording end
-                        delay(100)
+                        // delay(100)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
+                            Log.d(TAG, "Requesting haptic feedback (R+)")
+                            recordButton.performHapticFeedback(HapticFeedbackConstants.REJECT)
                         } else {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            Log.d(TAG, "Requesting haptic feedback (R-)")
+                            recordButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         }
                     }
                 }
@@ -332,14 +337,36 @@ class MainActivity : AppCompatActivity() {
             override fun onConfigureFailed(session: CameraCaptureSession) {
                 val exc = RuntimeException("Camera ${device.id} session configuration failed")
                 Log.e(TAG, exc.message, exc)
-                cont.resumeWithException(exc)
+                // cont.resumeWithException(exc)
             }
         }, handler)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        try {
+            session.close()
+            camera.close()
+            cameraThread.quitSafely()
+            recorder.release()
+            recordingSurface.release()
+        } catch (exc: Throwable) {
+            Log.e(TAG, "Error closing camera", exc)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        cameraThread.quitSafely()
+        recorder.release()
+        recordingSurface.release()
     }
 
     /**
      * END BORROWED CODE FROM AOSP.
      */
+
+    fun generateCameraThread() = HandlerThread("CameraThread").apply { start() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -369,9 +396,15 @@ class MainActivity : AppCompatActivity() {
 
         cameraView = findViewById(R.id.cameraPreview)
         recordButton = findViewById(R.id.recordButton)
+        recordButton.isHapticFeedbackEnabled = true
 
+        // setupCameraCallback()
+    }
+
+    private fun setupCameraCallback() {
         cameraView.holder.addCallback(object: SurfaceHolder.Callback {
             override fun surfaceCreated(holder: SurfaceHolder) {
+                Log.d(TAG,"Initializing surface!")
                 previewSurface = holder.surface
                 initializeCamera()
             }
@@ -382,46 +415,68 @@ class MainActivity : AppCompatActivity() {
                 width: Int,
                 height: Int
             ) {
+                Log.d(TAG, "Camera preview surface changed!")
                 // PROBABLY NOT THE BEST IDEA!
 //                previewSurface = holder.surface
 //                initializeCamera()
             }
 
             override fun surfaceDestroyed(holder: SurfaceHolder) {
-                // TODO("Not yet implemented")
+                Log.d(TAG, "Camera preview surface destroyed!")
+                previewSurface = null
             }
 
         })
     }
 
+    private var initializedAlready = false
 
-    private val DOWNLOAD_DIR = Environment
-        .getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    override fun onResume() {
+        super.onResume()
 
-    // val finalUri : Uri? = copyFileToDownloads(context, downloadedFile)
+        cameraThread = generateCameraThread()
+        cameraHandler = Handler(cameraThread.looper)
+
+        recorder = MediaRecorder()
+        recordingSurface = createRecordingSurface()
+
+        if (!initializedAlready) {
+            setupCameraCallback()
+            initializedAlready = true
+        }
+    }
+
 
     /**
      * THE CODE BELOW IS COPIED FROM Rubén Viguera at StackOverflow (CC-BY-SA 4.0).
      * See https://stackoverflow.com/a/64357198/13206041.
      */
-    fun copyFileToDownloads(context: Context, downloadedFile: File): Uri? {
+    private val DOWNLOAD_DIR = Environment
+        .getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+
+    // val finalUri : Uri? = copyFileToDownloads(context, downloadedFile)
+
+    fun copyFileToDownloads(context: Context, videoFile: File): Uri? {
         val resolver = context.contentResolver
+        // val relativeLoc = Environment.DIRECTORY_PICTURES + File.pathSeparator + "ASLRecorder"
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val contentValues = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, downloadedFile.name)
-                // put(MediaStore.MediaColumns.MIME_TYPE, getMimeType(downloadedFile))
-                put(MediaStore.MediaColumns.SIZE, downloadedFile.length())
+                // put(MediaStore.Video.VideoColumns.RELATIVE_PATH, relativeLoc)
+                put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                put(MediaStore.MediaColumns.SIZE, videoFile.length())
             }
-            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
         } else {
             val authority = "${context.packageName}.provider"
-            val destinyFile = File(DOWNLOAD_DIR, downloadedFile.name)
+            // Modify the line below if we add support for a subfolder within Downloads
+            val destinyFile = File(DOWNLOAD_DIR, videoFile.name)
             FileProvider.getUriForFile(context, authority, destinyFile)
         }?.also { downloadedUri ->
             resolver.openOutputStream(downloadedUri).use { outputStream ->
                 val brr = ByteArray(1024)
                 var len: Int
-                val bufferedInputStream = BufferedInputStream(FileInputStream(downloadedFile.absoluteFile))
+                val bufferedInputStream = BufferedInputStream(FileInputStream(videoFile.absoluteFile))
                 while ((bufferedInputStream.read(brr, 0, brr.size).also { len = it }) != -1) {
                     outputStream?.write(brr, 0, len)
                 }

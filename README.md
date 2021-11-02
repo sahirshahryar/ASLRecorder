@@ -10,18 +10,27 @@ sign language recognition models.
 - [x] Use round button instead of rectangular one
 - [x] Show which word the user should sign at the top of the interface
   - [x] Automatically label recordings by the word shown at the top of the UI
-- [ ] Actual list of words!
-- [ ] Dynamic device compatibility (query device capabilities instead of assuming them)
+- [x] Actual list of words!
+- [x] Dynamic device compatibility (query device capabilities instead of assuming them)
   - [x] Fetch camera list
-  - [ ] Set video quality to selected camera's resolution
 - [x] Check permissions and ask if not granted - **currently shows instructions but not prompt**
-- [ ] Test and tweak haptic feedback
+  - [ ] Don't require app to restart once permission has been granted
+- [x] Test and tweak haptic feedback (**CAVEAT**: Works on Pixel 5a, but not Samsung Galaxy A12)
 - [ ] UI Improvements
+  - [x] Non-stretched camera preview
+    - [ ] Make it 16:9
+  - [ ] Timer
+  - [ ] Feedback on successful recording
   - [ ] Home page, tutorial?
-  - [ ] **Option to delete a botched recording** (better for us too!)
+  - [ ] Recording sessions (esp. if we have a lot of one-handed signs)
+    - [ ] Random selection, topics, etc.?
+    - [ ] **Option to delete a botched recording** (better for us too!)
+    - [ ] Save all recordings to Google Photos on session end
 - [ ] Persistence? (Store which signs users have already recorded so they don't need to re-record)
-- [ ] Multitasking support (current version may crash on exit/reopen)
-- [x] Easy access to video files (upload? direct file browser?)
+- [x] Multitasking support (current version may crash on exit/reopen)
+- [x] Easy access to video files (upload? direct file browser?) — **copy to Downloads folder**
+  - [x] Upload strategy for videos (upload to Google Photos - preserves file name and uploads automatically), however there is a toggle that must be flipped on in the Google Photos Android
+  app to enable automatic uploads. Should be done before shipping devices out.
 
 
 
