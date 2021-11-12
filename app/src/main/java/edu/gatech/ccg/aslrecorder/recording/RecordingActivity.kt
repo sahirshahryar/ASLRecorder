@@ -1,4 +1,4 @@
-package edu.gatech.ccg.aslrecorder
+package edu.gatech.ccg.aslrecorder.recording
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -23,6 +23,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import edu.gatech.ccg.aslrecorder.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -46,7 +47,7 @@ import kotlin.coroutines.suspendCoroutine
  * @since   October 4, 2021
  * @version 1.0.0
  */
-class MainActivity : AppCompatActivity() {
+class RecordingActivity : AppCompatActivity() {
 
     /**
      * Whether or not the application should use the rear camera. The functionality
@@ -147,13 +148,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private val TAG = MainActivity::class.java.simpleName
+        private val TAG = RecordingActivity::class.java.simpleName
 
         private const val RECORDER_VIDEO_BITRATE: Int = 15_000_000
         private const val MIN_REQUIRED_RECORDING_TIME_MILLIS: Long = 1000L
 
         /** Creates a [File] named with the current date and time */
-        private fun createFile(activity: MainActivity): File {
+        private fun createFile(activity: RecordingActivity): File {
             val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss", Locale.US)
             val currentWord = activity.currentWord
             return File(activity.applicationContext.filesDir,
@@ -208,7 +209,7 @@ class MainActivity : AppCompatActivity() {
                     MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
 
                         // Prevents screen rotation during the video recording
-                        this@MainActivity.requestedOrientation =
+                        this@RecordingActivity.requestedOrientation =
                             ActivityInfo.SCREEN_ORIENTATION_LOCKED
 
                         // Start recording repeating requests, which will stop the ongoing preview
@@ -264,13 +265,14 @@ class MainActivity : AppCompatActivity() {
                             delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
                         }
 
-                        Log.d(TAG, "Recording stopped. Check " +
-                                this@MainActivity.getExternalFilesDir(null)?.absolutePath
+                        Log.d(
+                            TAG, "Recording stopped. Check " +
+                                this@RecordingActivity.getExternalFilesDir(null)?.absolutePath
                         )
                         recorder.stop()
 
-                        copyFileToDownloads(this@MainActivity, outputFile)
-                        outputFile = createFile(this@MainActivity)
+                        copyFileToDownloads(this@RecordingActivity, outputFile)
+                        outputFile = createFile(this@RecordingActivity)
 
                         // Send a haptic feedback on recording end
                         // delay(100)
@@ -304,7 +306,7 @@ class MainActivity : AppCompatActivity() {
 
             override fun onDisconnected(device: CameraDevice) {
                 Log.w(TAG, "Camera $cameraId has been disconnected")
-                this@MainActivity.finish()
+                this@RecordingActivity.finish()
             }
 
             override fun onError(device: CameraDevice, error: Int) {
@@ -370,7 +372,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_record)
 
         outputFile = createFile(this)
 
@@ -380,8 +382,15 @@ class MainActivity : AppCompatActivity() {
         // Set up view pager
         wordPager = findViewById(R.id.wordPager)
 
-        val wordArray = resources.getStringArray(R.array.words)
-        wordList = ArrayList(listOf(*wordArray))
+        val bundle = intent.extras
+
+        wordList = if (bundle?.containsKey("WORDS") == true) {
+            ArrayList(bundle.getStringArrayList("WORDS"))
+        } else {
+            val wordArray = resources.getStringArray(R.array.words)
+            ArrayList(listOf(*wordArray))
+        }
+
         currentWord = wordList[0]
 
         wordPager.adapter = WordPagerAdapter(this, wordList)
@@ -389,8 +398,8 @@ class MainActivity : AppCompatActivity() {
             override fun onPageSelected(position: Int) {
                 super.onPageSelected(position)
 
-                this@MainActivity.currentWord = wordList[position]
-                this@MainActivity.outputFile = createFile(this@MainActivity)
+                this@RecordingActivity.currentWord = wordList[position]
+                this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
             }
         })
 
@@ -425,7 +434,6 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Camera preview surface destroyed!")
                 previewSurface = null
             }
-
         })
     }
 
@@ -458,10 +466,8 @@ class MainActivity : AppCompatActivity() {
 
     fun copyFileToDownloads(context: Context, videoFile: File): Uri? {
         val resolver = context.contentResolver
-        // val relativeLoc = Environment.DIRECTORY_PICTURES + File.pathSeparator + "ASLRecorder"
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val contentValues = ContentValues().apply {
-                // put(MediaStore.Video.VideoColumns.RELATIVE_PATH, relativeLoc)
                 put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
                 put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
                 put(MediaStore.MediaColumns.SIZE, videoFile.length())

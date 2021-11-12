@@ -1,10 +1,9 @@
-package edu.gatech.ccg.aslrecorder
+package edu.gatech.ccg.aslrecorder.recording
 
-import android.view.View
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
+import edu.gatech.ccg.aslrecorder.R
 import java.util.ArrayList
 
 class WordPagerAdapter(activity: AppCompatActivity, words: ArrayList<String>):

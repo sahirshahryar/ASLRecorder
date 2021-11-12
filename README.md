@@ -21,6 +21,8 @@ sign language recognition models.
     - [ ] Make it 16:9
   - [ ] Timer
   - [ ] Feedback on successful recording
+    - [x] Haptics
+    - [ ] Visual feedback
   - [ ] Home page, tutorial?
   - [ ] Recording sessions (esp. if we have a lot of one-handed signs)
     - [ ] Random selection, topics, etc.?

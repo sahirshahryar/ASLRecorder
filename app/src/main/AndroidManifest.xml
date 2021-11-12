@@ -15,12 +15,20 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ASLRecorder"
         android:requestLegacyExternalStorage="true">
-        <activity android:name=".MainActivity">
+        <activity android:name=".splash.SplashScreenActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <activity android:name=".recording.RecordingActivity"
+                  android:parentActivityName=".splash.SplashScreenActivity">
+<!--            <intent-filter>-->
+<!--                <action android:name="android.intent.action.MAIN" />-->
+
+<!--                <category android:name="android.intent.category.LAUNCHER" />-->
+<!--            </intent-filter>-->
         </activity>
         <provider
             android:name="androidx.core.content.FileProvider"

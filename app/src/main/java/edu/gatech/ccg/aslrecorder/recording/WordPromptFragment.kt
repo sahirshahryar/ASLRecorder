@@ -1,10 +1,11 @@
-package edu.gatech.ccg.aslrecorder
+package edu.gatech.ccg.aslrecorder.recording
 
 import android.os.Bundle
 import android.view.View
 import android.widget.TextView
 import androidx.annotation.LayoutRes
 import androidx.fragment.app.Fragment
+import edu.gatech.ccg.aslrecorder.R
 
 class WordPromptFragment(label: String, @LayoutRes layout: Int): Fragment(layout) {
 
