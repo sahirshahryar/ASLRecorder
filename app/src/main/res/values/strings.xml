@@ -1,12 +1,6 @@
 <resources>
     <string name="app_name">ASLRecorder</string>
     <!-- List of words derived from MacArthur-Bates ASL -->
-    <!-- Miscellaneous -->
-    <string-array name="words">
-        <item>uh oh</item>
-        <item>owie</item>
-        <item>world</item>
-    </string-array>
     <string-array name="animals">
         <item>bee</item>
         <item>bird</item>
@@ -71,6 +65,24 @@
         <item>toothbrush</item>
         <item>trash</item>
         <item>vacuum</item>
+        <item>pen</item>
+        <item>puzzle</item>
+        <item>toy</item>
+        <item>hat</item>
+        <item>shirt</item>
+        <item>underwear</item>
+        <item>zipper</item>
+        <item>bathroom</item>
+        <item>bed</item>
+        <item>closet</item>
+        <item>door</item>
+        <item>drawer</item>
+        <item>dryer</item>
+        <item>potty</item>
+        <item>refrigerator</item>
+        <item>shower</item>
+        <item>stairs</item>
+        <item>TV</item>
     </string-array>
     <string-array name="people">
         <item>aunt</item>
@@ -107,18 +119,30 @@
         <item>teeth</item>
         <item>tongue</item>
     </string-array>
-    <string-array name="furniture">
-        <item>bathroom</item>
-        <item>bed</item>
-        <item>closet</item>
-        <item>door</item>
-        <item>drawer</item>
-        <item>dryer</item>
-        <item>potty</item>
-        <item>refrigerator</item>
-        <item>shower</item>
-        <item>stairs</item>
-        <item>TV</item>
+    <string-array name="outdoors">
+        <item>car</item>
+        <item>flag</item>
+        <item>grass</item>
+        <item>moon</item>
+        <item>rain</item>
+        <item>snow</item>
+        <item>sun</item>
+        <item>tree</item>
+        <item>plane</item>
+        <item>water</item>
+        <item>farm</item>
+        <item>home</item>
+        <item>outside</item>
+        <item>party</item>
+        <item>store</item>
+    </string-array>
+    <string-array name="routines">
+        <item>bath</item>
+        <item>call (on the phone)</item>
+        <item>go potty</item>
+        <item>nap</item>
+        <item>snack</item>
+        <item>night-night</item>
     </string-array>
     <string-array name="actions">
         <item>blow</item>
@@ -153,5 +177,86 @@
         <item>wake</item>
         <item>watch</item>
         <item>wish</item>
+    </string-array>
+    <string-array name="adjectives">
+        <item>asleep</item>
+        <item>aware</item>
+        <item>bad</item>
+        <item>better</item>
+        <item>black</item>
+        <item>blue</item>
+        <item>brown</item>
+        <item>cute</item>
+        <item>dirty</item>
+        <item>dry</item>
+        <item>empty</item>
+        <item>fine</item>
+        <item>first</item>
+        <item>good</item>
+        <item>green</item>
+        <item>high</item>
+        <item>hot</item>
+        <item>hungry</item>
+        <item>loud</item>
+        <item>mad</item>
+        <item>naughty</item>
+        <item>noisy</item>
+        <item>old</item>
+        <item>orange</item>
+        <item>pretty</item>
+        <item>red</item>
+        <item>sad</item>
+        <item>sleepy</item>
+        <item>sticky</item>
+        <item>stuck</item>
+        <item>thirsty</item>
+        <item>wet</item>
+        <item>white</item>
+        <item>yellow</item>
+        <item>yucky</item>
+    </string-array>
+    <string-array name="helper_words">
+        <item>later</item>
+        <item>tomorrow</item>
+        <item>yesterday</item>
+        <item>where</item>
+        <item>who</item>
+        <item>why</item>
+        <item>beside</item>
+        <item>down</item>
+        <item>for</item>
+        <item>off</item>
+        <item>out</item>
+        <item>there</item>
+        <item>up</item>
+        <item>all</item>
+        <item>another</item>
+        <item>not</item>
+        <item>any</item>
+        <item>same</item>
+        <item>will</item>
+        <item>because</item>
+        <item>if</item>
+        <item>yes</item>
+        <item>no</item>
+        <item>please</item>
+        <item>thank you</item>
+        <item>hello</item>
+        <item>bye</item>
+        <item>shhh</item>
+        <item>uh-oh</item>
+        <item>ouch / owie</item>
+    </string-array>
+    <string-array name="pronouns">
+        <!-- Clarify: are he/him/she/her/they/them/you
+             all the same sign? -->
+        <item>he</item>
+        <item>mine / my</item>
+        <item>his</item>
+        <item>we / us</item>
+        <item>this</item>
+        <item>those</item>
+        <item>that</item>
+        <item>yourself</item>
     </string-array>
 </resources>

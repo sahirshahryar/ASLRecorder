@@ -8,6 +8,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.hardware.camera2.*
+import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.MediaCodec
 import android.media.MediaRecorder
 import android.net.Uri
@@ -24,6 +25,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import edu.gatech.ccg.aslrecorder.R
+import edu.gatech.ccg.aslrecorder.randomChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -36,11 +38,13 @@ import java.lang.IllegalStateException
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
+const val WORDS_PER_SESSION = 5
 
 /**
  * @author  Sahir Shahryar <sahirshahryar@gatech.edu>
@@ -66,6 +70,14 @@ class RecordingActivity : AppCompatActivity() {
      */
     lateinit var recordButton: FloatingActionButton
 
+
+    /**
+     * Whether or not the recording button is disabled. When this is true,
+     * all interactions with the record button will be passed to the layer
+     * underneath.
+     */
+    var recordButtonDisabled = false
+
     /**
      * List of words that we can swipe through
      */
@@ -81,6 +93,12 @@ class RecordingActivity : AppCompatActivity() {
      */
     var currentWord: String = "test"
 
+    /**
+     * Map of video recordings the user has taken
+     * key (String) the word being recorded
+     * value (ArrayList<File>) list of recording files for each word
+     */
+    var sessionVideoFiles = HashMap<String, ArrayList<File>>()
 
     /**
      * SUBSTANTIAL PORTIONS OF THE BELOW CODE BELOW ARE BORROWED
@@ -103,10 +121,6 @@ class RecordingActivity : AppCompatActivity() {
         val context = this.applicationContext
         context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     }
-
-//    private val outputFile: File by lazy {
-//        createFile(this)
-//    }
 
     private var previewSurface: Surface? = null
 
@@ -176,11 +190,11 @@ class RecordingActivity : AppCompatActivity() {
             // Dim Record button?
             recordButton.backgroundTintList = ColorStateList.valueOf(0xFFFA9389.toInt())
         } else {
-            val manager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+            // val manager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
             var cameraId = ""
 
-            for (id in manager.cameraIdList) {
-                val face = manager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)
+            for (id in cameraManager.cameraIdList) {
+                val face = cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)
                 if (face == CameraSelector.LENS_FACING_FRONT) {
                     cameraId = id
                     break
@@ -191,20 +205,38 @@ class RecordingActivity : AppCompatActivity() {
                 throw IllegalStateException("No front camera available")
             }
 
-            // TODO: Adjust aspect ratio to 16:9 so it matches recording
             camera = openCamera(cameraManager, cameraId, cameraHandler)
+
+            // Don't delete the below code for now, we can use it to get supported
+            // preview resolutions on devices without support for 1080p camera previews
+            /*  val characteristics = cameraManager.getCameraCharacteristics(camera.id)
+            val scm = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+            val sizes = scm?.getOutputSizes(SurfaceHolder::class.java)
+
+            if (sizes != null) {
+                for (size in sizes) {
+                    Log.d("SIZE",
+                        "The size ${size.width} x ${size.height} is supported")
+                }
+            } */
 
             val targets = listOf(previewSurface!!, recordingSurface)
             session = createCaptureSession(camera, targets, cameraHandler)
 
             previewRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                previewSurface?.let { addTarget(it) }
+                previewSurface?.let {
+                    addTarget(it)
+                }
             }.build()
 
             session.setRepeatingRequest(previewRequest, null, /* cameraHandler */ null)
 
             // React to user touching the capture button
             recordButton.setOnTouchListener { view, event ->
+                if (recordButtonDisabled) {
+                    return@setOnTouchListener false
+                }
+
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
 
@@ -271,7 +303,17 @@ class RecordingActivity : AppCompatActivity() {
                         )
                         recorder.stop()
 
-                        copyFileToDownloads(this@RecordingActivity, outputFile)
+                        if (!sessionVideoFiles.containsKey(currentWord)) {
+                            sessionVideoFiles[currentWord] = ArrayList()
+                        }
+
+                        val recordingList = sessionVideoFiles[currentWord]!!
+                        recordingList.add(outputFile)
+
+                        val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
+                        wordPagerAdapter.updateRecordingList()
+
+                        // copyFileToDownloads(this@RecordingActivity, outputFile)
                         outputFile = createFile(this@RecordingActivity)
 
                         // Send a haptic feedback on recording end
@@ -289,10 +331,6 @@ class RecordingActivity : AppCompatActivity() {
                 true
             }
         }
-
-
-        // TODO: Determine `cameraId`'s value
-
     }
 
     @SuppressLint("MissingPermission")
@@ -376,30 +414,69 @@ class RecordingActivity : AppCompatActivity() {
 
         outputFile = createFile(this)
 
-        // Set title bar text
-        title = "Please hold the button and record..."
-
         // Set up view pager
         wordPager = findViewById(R.id.wordPager)
 
         val bundle = intent.extras
 
-        wordList = if (bundle?.containsKey("WORDS") == true) {
+        val fullWordList = if (bundle?.containsKey("WORDS") == true) {
             ArrayList(bundle.getStringArrayList("WORDS"))
         } else {
-            val wordArray = resources.getStringArray(R.array.words)
+            // Something has gone wrong if this code ever executes
+            val wordArray = resources.getStringArray(R.array.animals)
             ArrayList(listOf(*wordArray))
         }
 
+        val randomSeed = if (bundle?.containsKey("SEED") == true) {
+            bundle.getLong("SEED")
+        } else {
+            null
+        }
+
+        Log.d("RECORD",
+            "Choosing $WORDS_PER_SESSION words from a total of ${fullWordList.size}")
+        wordList = randomChoice(fullWordList, WORDS_PER_SESSION, randomSeed)
         currentWord = wordList[0]
 
-        wordPager.adapter = WordPagerAdapter(this, wordList)
+        // Set title bar text
+        title = "1 of ${wordList.size}"
+
+        wordPager.adapter = WordPagerAdapter(this, wordList, sessionVideoFiles)
         wordPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 super.onPageSelected(position)
 
-                this@RecordingActivity.currentWord = wordList[position]
-                this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
+                Log.d("D", "${wordList.size}")
+                if (position < wordList.size) {
+                    // Animate the record button back in, if necessary.
+                    if (recordButtonDisabled) {
+                        recordButton.animate().apply {
+                            alpha(1.0f)
+                            duration = 250
+                        }.start()
+
+                        recordButtonDisabled = false
+                        recordButton.isClickable = true
+                        recordButton.isFocusable = true
+                    }
+
+                    this@RecordingActivity.currentWord = wordList[position]
+                    this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
+                    title = "${position + 1} of ${wordList.size}"
+                } else {
+                    // Hide record button and move the slider to the front (so users can't
+                    // accidentally press record)
+                    recordButton.animate().apply {
+                        alpha(0.0f)
+                        duration = 250
+                    }.start()
+
+                    recordButton.isClickable = false
+                    recordButton.isFocusable = false
+                    recordButtonDisabled = true
+
+                    title = "Session summary"
+                }
             }
         })
 
@@ -415,6 +492,8 @@ class RecordingActivity : AppCompatActivity() {
             override fun surfaceCreated(holder: SurfaceHolder) {
                 Log.d(TAG,"Initializing surface!")
                 previewSurface = holder.surface
+
+                holder.setFixedSize(1920, 1080)
                 initializeCamera()
             }
 
@@ -454,9 +533,18 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+    public fun goToWord(index: Int) {
+        wordPager.currentItem = index
+    }
+
+    fun deleteRecording(word: String, index: Int) {
+        sessionVideoFiles[word]?.removeAt(index)
+    }
+
 
     /**
-     * THE CODE BELOW IS COPIED FROM Rubén Viguera at StackOverflow (CC-BY-SA 4.0).
+     * THE CODE BELOW IS COPIED FROM Rubén Viguera at StackOverflow (CC-BY-SA 4.0),
+     * with some modifications.
      * See https://stackoverflow.com/a/64357198/13206041.
      */
     private val DOWNLOAD_DIR = Environment

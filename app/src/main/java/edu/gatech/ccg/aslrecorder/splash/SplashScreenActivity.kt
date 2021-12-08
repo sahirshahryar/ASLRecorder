@@ -16,8 +16,6 @@ class SplashScreenActivity: AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
 
-        print("PLEASE CALL THIS CODE?")
-
         recordingSessionsList = findViewById(R.id.recording_sessions_list)
         recordingSessionsList.layoutManager = LinearLayoutManager(this)
         recordingSessionsList.adapter = TopicListAdapter()

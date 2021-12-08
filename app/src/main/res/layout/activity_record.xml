@@ -11,7 +11,7 @@
         android:id="@+id/aspectRatioConstraint"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintDimensionRatio="H,3:4"
+        app:layout_constraintDimensionRatio="H,9:16"
         app:layout_constraintEnd_toEndOf="@+id/wordPager"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
@@ -33,27 +33,25 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/aspectRatioConstraint"
+        app:layout_constraintEnd_toEndOf="@id/aspectRatioConstraint"
         app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintStart_toStartOf="@id/aspectRatioConstraint"
+        app:layout_constraintTop_toTopOf="@id/aspectRatioConstraint" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/recordButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="23dp"
         android:layout_marginBottom="90dp"
         android:backgroundTint="#F80000"
         android:clickable="true"
         android:scaleX="2"
         android:scaleY="2"
         app:borderWidth="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/aspectRatioConstraint"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/aspectRatioConstraint"
         app:srcCompat="@drawable/record"
         app:tint="@android:color/white" />
 </androidx.constraintlayout.widget.ConstraintLayout>
