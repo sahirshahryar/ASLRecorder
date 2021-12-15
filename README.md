@@ -18,22 +18,22 @@ sign language recognition models.
 - [x] Test and tweak haptic feedback (**CAVEAT**: Works on Pixel 5a, but not Samsung Galaxy A12)
 - [ ] UI Improvements
   - [x] Non-stretched camera preview
-    - [ ] Make it 16:9
+    - [x] Make it 16:9
   - [ ] Timer
   - [ ] Feedback on successful recording
     - [x] Haptics
     - [ ] Visual feedback
   - [ ] Home page, tutorial?
-  - [ ] Recording sessions (esp. if we have a lot of one-handed signs)
-    - [ ] Random selection, topics, etc.?
-    - [ ] **Option to delete a botched recording** (better for us too!)
-    - [ ] Save all recordings to Google Photos on session end
+  - [x] Recording sessions (esp. if we have a lot of one-handed signs)
+    - [x] Random selection, topics, etc.?
+    - [x] **Option to delete a botched recording** (better for us too!)
+    - [x] Save all recordings to Google Photos on session end
 - [ ] Persistence? (Store which signs users have already recorded so they don't need to re-record)
 - [x] Multitasking support (current version may crash on exit/reopen)
 - [x] Easy access to video files (upload? direct file browser?) — **copy to Downloads folder**
   - [x] Upload strategy for videos (upload to Google Photos - preserves file name and uploads automatically), however there is a toggle that must be flipped on in the Google Photos Android
   app to enable automatic uploads. Should be done before shipping devices out.
-
+- [ ] Hand-off to future developers: comments and documentation
 
 
 ## Notes

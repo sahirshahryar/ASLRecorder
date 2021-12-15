@@ -1,3 +1,27 @@
+/**
+ * RecordingActivity.kt
+ * This file is part of ASLRecorder, licensed under the MIT license.
+ *
+ * Copyright (c) 2021 Sahir Shahryar <contact@sahirshahryar.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package edu.gatech.ccg.aslrecorder.recording
 
 import android.Manifest
@@ -8,7 +32,6 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.hardware.camera2.*
-import android.hardware.camera2.params.StreamConfigurationMap
 import android.media.MediaCodec
 import android.media.MediaRecorder
 import android.net.Uri
@@ -47,7 +70,10 @@ import kotlin.coroutines.suspendCoroutine
 const val WORDS_PER_SESSION = 5
 
 /**
- * @author  Sahir Shahryar <sahirshahryar@gatech.edu>
+ * Represents the primary recording activity for ASLRecorder, in which users actually
+ * sign ASL words into a camera.
+ *
+ * @author  Sahir Shahryar <contact@sahirshahryar.com>
  * @since   October 4, 2021
  * @version 1.0.0
  */
@@ -57,13 +83,17 @@ class RecordingActivity : AppCompatActivity() {
      * Whether or not the application should use the rear camera. The functionality
      * to switch cameras on-the-fly has not yet been implemented, so this is a constant
      * that must be set at compile time.
+     *
+     * TODO: Respect this setting.
      */
     private val useBackCamera = false
+
 
     /**
      * The camera preview.
      */
     lateinit var cameraView: SurfaceView
+
 
     /**
      * The button that must be held to record video.
@@ -78,20 +108,24 @@ class RecordingActivity : AppCompatActivity() {
      */
     var recordButtonDisabled = false
 
+
     /**
      * List of words that we can swipe through
      */
     lateinit var wordList: ArrayList<String>
+
 
     /**
      * The pager used to swipe back and forth between words.
      */
     lateinit var wordPager: ViewPager2
 
+
     /**
      * The current word that the user has been asked to sign.
      */
     var currentWord: String = "test"
+
 
     /**
      * Map of video recordings the user has taken
@@ -109,33 +143,91 @@ class RecordingActivity : AppCompatActivity() {
      *     src/main/java/com/example/android/camera2/video/fragments/CameraFragment.kt
      */
 
+    /**
+     * The camera being used for recording.
+     */
     private lateinit var camera: CameraDevice
 
+
+    /**
+     * The thread responsible for handling the camera.
+     */
     private lateinit var cameraThread: HandlerThread
 
+
+    /**
+     * Handler object for the camera.
+     */
     private lateinit var cameraHandler: Handler
 
+
+    /**
+     * The current recording session, if we are currently capturing video.
+     */
     private lateinit var session: CameraCaptureSession
 
+
+    /**
+     * The Android service responsible for providing information about the phone's camera setup.
+     */
     private val cameraManager: CameraManager by lazy {
         val context = this.applicationContext
         context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     }
 
+
+    /**
+     * A [Surface] (canvas) which is used to show the user a real-time preview of their video feed.
+     */
     private var previewSurface: Surface? = null
 
+
+    /**
+     * The [CaptureRequest] needed to send video data to [previewSurface].
+     */
     private lateinit var previewRequest: CaptureRequest
 
+
+    /**
+     * The [CaptureRequest] needed to send video data to a recording file.
+     */
     private lateinit var recordRequest: CaptureRequest
 
+
+    /**
+     * The [File] where the next recording will be stored. The filename contains the word being
+     * signed, as well as the date and time of the recording.
+     *
+     * TODO: Delete these files after copying them to the user's photo library.
+     */
     private lateinit var outputFile: File
 
+
+    /**
+     * The [Surface] (canvas) where video recording data is stored. Essentially, the camera
+     * feed is projected onto this [Surface], and the [MediaRecorder] ([recorder]) reads from
+     * this surface into the MP4 format.
+     */
     private lateinit var recordingSurface: Surface
 
+
+    /**
+     * The media recording service.
+     */
     private lateinit var recorder: MediaRecorder
 
+
+    /**
+     * The time at which the current recording started. We use this to ensure that recordings
+     * are at least one second long.
+     */
     private var recordingStartMillis: Long = 0L
 
+
+    /**
+     * Generates a new [Surface] for storing recording data, which will promptly be assigned to
+     * the recordingSurface field above.
+     */
     private fun createRecordingSurface(): Surface {
         val surface = MediaCodec.createPersistentInputSurface()
         val recorder = MediaRecorder()
@@ -147,6 +239,10 @@ class RecordingActivity : AppCompatActivity() {
         return surface
     }
 
+
+    /**
+     * Prepares a [MediaRecorder] using the given surface.
+     */
     private fun prepareRecorder(rec: MediaRecorder, surface: Surface)
             = rec.apply {
         setVideoSource(MediaRecorder.VideoSource.SURFACE)
@@ -161,14 +257,31 @@ class RecordingActivity : AppCompatActivity() {
         setInputSurface(surface)
     }
 
+
+    /**
+     * Additional data for recordings.
+     */
     companion object {
         private val TAG = RecordingActivity::class.java.simpleName
 
+        /**
+         * Record video at 15 Mbps. At 1080p30, this level of detail should be more than high
+         * enough.
+         */
         private const val RECORDER_VIDEO_BITRATE: Int = 15_000_000
+
+
+        /**
+         * The mimimum recording time is one second.
+         */
         private const val MIN_REQUIRED_RECORDING_TIME_MILLIS: Long = 1000L
 
-        /** Creates a [File] named with the current date and time */
+        /**
+         *  Creates a [File] named with the current date and time
+         */
         private fun createFile(activity: RecordingActivity): File {
+            // Note that since we require a minimum of one second for recordings,
+            // this date format is guaranteed to produce unique file names.
             val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss", Locale.US)
             val currentWord = activity.currentWord
             return File(activity.applicationContext.filesDir,
@@ -176,25 +289,46 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+
+    /**
+     * This code initializes the camera-related portion of the code, adding listeners to enable
+     * video recording as long as we hold down the Record button.
+     */
     @SuppressLint("ClickableViewAccessibility")
     private fun initializeCamera() = lifecycleScope.launch(Dispatchers.Main) {
-        // Test camera permission
+        /**
+         * First, check camera permissions. If the user has not granted permission to use the
+         * camera, give a prompt asking them to grant that permission in the Settings app, then
+         * relaunch the app.
+         *
+         * TODO: Streamline this flow so that users don't need to restart the app at all.
+         */
         if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED
             || checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
                PackageManager.PERMISSION_GRANTED) {
 
             val errorRoot = findViewById<ConstraintLayout>(R.id.main_root)
-            val errorMessage = layoutInflater.inflate(R.layout.permission_error, errorRoot, false)
+            val errorMessage = layoutInflater.inflate(R.layout.permission_error, errorRoot,
+                false)
             errorRoot.addView(errorMessage)
 
-            // Dim Record button?
+            // Dim Record button
             recordButton.backgroundTintList = ColorStateList.valueOf(0xFFFA9389.toInt())
-        } else {
-            // val manager: CameraManager = getSystemService(Context.CAMERA_SERVICE) as CameraManager
+        }
+
+        /**
+         * User has given permission to use the camera
+         */
+        else {
+            /**
+             * Find the front camera, crashing if none is available (should never happen, assuming
+             * a reasonably modern device)
+             */
             var cameraId = ""
 
             for (id in cameraManager.cameraIdList) {
-                val face = cameraManager.getCameraCharacteristics(id).get(CameraCharacteristics.LENS_FACING)
+                val face = cameraManager.getCameraCharacteristics(id)
+                    .get(CameraCharacteristics.LENS_FACING)
                 if (face == CameraSelector.LENS_FACING_FRONT) {
                     cameraId = id
                     break
@@ -207,8 +341,11 @@ class RecordingActivity : AppCompatActivity() {
 
             camera = openCamera(cameraManager, cameraId, cameraHandler)
 
-            // Don't delete the below code for now, we can use it to get supported
-            // preview resolutions on devices without support for 1080p camera previews
+            /**
+             * Don't delete the below code for now, as we can use it to get supported
+             * preview resolutions on devices without support for 1080p camera previews.
+             * However, this should not be a problem in most cases.
+             */
             /*  val characteristics = cameraManager.getCameraCharacteristics(camera.id)
             val scm = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
             val sizes = scm?.getOutputSizes(SurfaceHolder::class.java)
@@ -220,6 +357,10 @@ class RecordingActivity : AppCompatActivity() {
                 }
             } */
 
+
+            /**
+             * Send video feed to both [previewSurface] and [recordingSurface].
+             */
             val targets = listOf(previewSurface!!, recordingSurface)
             session = createCaptureSession(camera, targets, cameraHandler)
 
@@ -231,22 +372,32 @@ class RecordingActivity : AppCompatActivity() {
 
             session.setRepeatingRequest(previewRequest, null, /* cameraHandler */ null)
 
-            // React to user touching the capture button
+            /**
+             * Set a listener for when the user presses the record button.
+             */
             recordButton.setOnTouchListener { view, event ->
+                /**
+                 * Do nothing if the record button is disabled.
+                 */
                 if (recordButtonDisabled) {
                     return@setOnTouchListener false
                 }
 
                 when (event.action) {
+                    /**
+                     * User holds down the record button:
+                     */
                     MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
 
-                        // Prevents screen rotation during the video recording
+                        /**
+                         * Prevents screen rotation during the video recording
+                         */
                         this@RecordingActivity.requestedOrientation =
                             ActivityInfo.SCREEN_ORIENTATION_LOCKED
 
-                        // Start recording repeating requests, which will stop the ongoing preview
-                        //  repeating requests without having to explicitly call
-                        //  `session.stopRepeating`
+                        /**
+                         * Create a request to record at 30fps.
+                         */
                         recordRequest = session.device.createCaptureRequest(
                             CameraDevice.TEMPLATE_RECORD).apply {
                                 previewSurface?.let { addTarget(it) }
@@ -262,7 +413,14 @@ class RecordingActivity : AppCompatActivity() {
 
                         // Finalizes recorder setup and starts recording
                         recorder.apply {
-                            // For now, actually reading the device orientation is unnecessary
+                            /**
+                             * The orientation of 270 degrees (-90 degrees) was determined through
+                             * experimentation. For now, we do not need to support other
+                             * orientations than the default portrait orientation.
+                             *
+                             * TODO: Verify validity of this orientation on devices other than the
+                             *       Pixel 5a.
+                             */
                             setOrientationHint(270)
                             prepare()
                             start()
@@ -272,9 +430,9 @@ class RecordingActivity : AppCompatActivity() {
 
                         // Starts recording animation
                         // fragmentCameraBinding.overlay.post(animationTask)
-
-                        // Send recording started haptic
-                        // delay(100)
+                        /**
+                         * Send haptic feedback for users.
+                         */
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             Log.d(TAG, "Requesting haptic feedback (R+)")
                             recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -283,15 +441,19 @@ class RecordingActivity : AppCompatActivity() {
                             recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
                             HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
                         }
+
+                        // TODO: Add a recording timer.
                     }
 
+                    /**
+                     * User releases the record button:
+                     */
                     MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {
-
-                        // Unlocks screen rotation after recording finished
-                        // requireActivity().requestedOrientation =
-                        //    ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-
-                        // Requires recording of at least MIN_REQUIRED_RECORDING_TIME_MILLIS
+                        /**
+                         * Ensure the recording is at least [MIN_REQUIRED_RECORDING_TIME_MILLIS]
+                         * milliseconds long (i.e., 1 second), and delay the code to stop recording
+                         * until at least that much time has passed.
+                         */
                         val elapsedTimeMillis = System.currentTimeMillis() - recordingStartMillis
                         if (elapsedTimeMillis < MIN_REQUIRED_RECORDING_TIME_MILLIS) {
                             delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
@@ -303,6 +465,10 @@ class RecordingActivity : AppCompatActivity() {
                         )
                         recorder.stop()
 
+                        /**
+                         * Add this recording to the list of recordings for the currently-selected
+                         * word.
+                         */
                         if (!sessionVideoFiles.containsKey(currentWord)) {
                             sessionVideoFiles[currentWord] = ArrayList()
                         }
@@ -539,6 +705,16 @@ class RecordingActivity : AppCompatActivity() {
 
     fun deleteRecording(word: String, index: Int) {
         sessionVideoFiles[word]?.removeAt(index)
+    }
+
+    fun concludeRecordingSession() {
+        for (entry in sessionVideoFiles) {
+            for (file in entry.value) {
+                copyFileToDownloads(this.applicationContext, file)
+            }
+        }
+
+        finish()
     }
 
 

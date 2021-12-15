@@ -1,6 +1,30 @@
+/**
+ * RecordingListAdapter.kt
+ * This file is part of ASLRecorder, licensed under the MIT license.
+ *
+ * Copyright (c) 2021 Sahir Shahryar <contact@sahirshahryar.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 package edu.gatech.ccg.aslrecorder.recording
 
-import android.media.MediaPlayer
+import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -70,17 +94,27 @@ class RecordingListAdapter(wordList: ArrayList<String>,
             val deleteButton = itemView.findViewById<ImageButton>(R.id.deleteRecording)
             deleteButton.setOnClickListener {
                 activity.get()?.deleteRecording(word, recordingIndex)
-                listAdapter.get()?.notifyItemRemoved(entryPosition)
+
+                // NOTE: This was previously notifyItemRemoved as that is more
+                // efficient, but it would cause crashes when not deleting the very latest
+                // recording for a given word (as the indices would be rearranged)
+                listAdapter.get()?.notifyDataSetChanged()
             }
 
             label.setOnClickListener {
-                val mediaPlayer = MediaPlayer().apply {
-                    activity.get()?.let {
-                        setDataSource(it.sessionVideoFiles[word]!![recordingIndex].absolutePath)
-                    }
-                    prepare()
-                    start()
-                }
+                val file = listAdapter.get()?.recordings?.get(word)!![recordingIndex]
+
+                val bundle = Bundle()
+                bundle.putString("word", word)
+                bundle.putInt("recordingIndex", recordingIndex)
+                bundle.putString("filename", file.absolutePath)
+
+                val previewFragment = VideoPreviewFragment(R.layout.recording_preview)
+                previewFragment.arguments = bundle
+
+                val transaction = activity.get()!!.supportFragmentManager.beginTransaction()
+                transaction.add(previewFragment, "videoPreview")
+                transaction.commit()
             }
         }
     }
@@ -104,7 +138,9 @@ class RecordingListAdapter(wordList: ArrayList<String>,
         val decomposedIndex = getWordAndIndex(position)
         Log.d("HELLO", "Binding $position ($decomposedIndex)")
         if (holder is SectionHeader) {
-            Log.d("HELLO", "is SectionHeader!")
+            // First: Index of word in words array
+            // Second: words[index] (i.e. the actual word)
+            // Third: index of a particular recording inside the array at recordings[word]
             holder.setData(decomposedIndex.second, decomposedIndex.first, activity)
         } else if (holder is RecordingEntry) {
             holder.setData(decomposedIndex.second, decomposedIndex.third!!,
@@ -148,7 +184,7 @@ class RecordingListAdapter(wordList: ArrayList<String>,
             recordingIndex = recordingCount - relativeIndex
         }
 
-        return Triple(itemIndex, word, recordingIndex)
+        return Triple(index, word, recordingIndex)
     }
 
 }
