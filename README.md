@@ -1,4 +1,4 @@
-# ASLRecorder (WIP)
+# ASLRecorder (WIP) (Forked from Sahir Shahryar's ASLRecorder: https://github.com/sahirshahryar/ASLRecorder)
 
 Android app for Deaf and hard-of-hearing (DHH) users to record training videos for
 sign language recognition models.
