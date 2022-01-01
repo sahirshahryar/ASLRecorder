@@ -24,25 +24,53 @@
  */
 package edu.gatech.ccg.aslrecorder.splash
 
+import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.PersistableBundle
-import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import edu.gatech.ccg.aslrecorder.R
 
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.camera.core.*
+import androidx.core.app.ActivityCompat
+import java.util.*
+
+import android.Manifest
+
 class SplashScreenActivity: AppCompatActivity() {
 
     lateinit var recordingSessionsList: RecyclerView
 
+    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
+        ContextCompat.checkSelfPermission(
+                baseContext, it) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun startCamera() {}
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_splash)
+
+        // Request camera permissions
+        if (allPermissionsGranted()) {
+            startCamera()
+        } else {
+            ActivityCompat.requestPermissions(
+                this, REQUIRED_PERMISSIONS, REQUEST_CODE_PERMISSIONS)
+        }
 
         recordingSessionsList = findViewById(R.id.recording_sessions_list)
         recordingSessionsList.layoutManager = LinearLayoutManager(this)
         recordingSessionsList.adapter = TopicListAdapter()
     }
 
+    companion object {
+        private const val TAG = "CameraXBasic"
+        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
+        private const val REQUEST_CODE_PERMISSIONS = 10
+        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+    }
 }

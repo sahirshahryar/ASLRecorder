@@ -33,6 +33,8 @@ sign language recognition models.
 - [x] Easy access to video files (upload? direct file browser?) — **copy to Downloads folder**
   - [x] Upload strategy for videos (upload to Google Photos - preserves file name and uploads automatically), however there is a toggle that must be flipped on in the Google Photos Android
   app to enable automatic uploads. Should be done before shipping devices out.
+- [x] App asks for camera and storage permission before starting
+- [ ] Support Android 11+ external writing
 - [ ] Hand-off to future developers: comments and documentation
 
 
