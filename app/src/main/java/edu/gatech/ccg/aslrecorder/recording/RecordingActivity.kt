@@ -42,6 +42,10 @@ import android.util.Log
 import android.util.Range
 import android.view.*
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.CameraX
+import androidx.camera.core.Preview
+import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
@@ -60,12 +64,22 @@ import java.io.FileInputStream
 import java.lang.IllegalStateException
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.locks.Lock
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
+import kotlin.concurrent.withLock
 
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import androidx.camera.video.Quality
+import androidx.camera.video.VideoCapture
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import kotlinx.android.synthetic.main.activity_record.*
+
 
 const val WORDS_PER_SESSION = 5
 
@@ -78,6 +92,8 @@ const val WORDS_PER_SESSION = 5
  * @version 1.0.0
  */
 class RecordingActivity : AppCompatActivity() {
+
+    private lateinit var context: Context
 
     /**
      * Whether or not the application should use the rear camera. The functionality
@@ -289,6 +305,37 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+    private fun startCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
+        cameraProviderFuture.addListener(Runnable {
+            // Used to bind the lifecycle of cameras to the lifecycle owner
+            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
+            // Preview
+            val preview = Preview.Builder()
+                .build()
+                .also {
+                    it.setSurfaceProvider(viewFinder.surfaceProvider)
+                }
+
+            // Select back camera as a default
+            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+
+            try {
+                // Unbind use cases before rebinding
+                cameraProvider.unbindAll()
+
+                // Bind use cases to camera
+                cameraProvider.bindToLifecycle(
+                    this, cameraSelector, preview)
+
+            } catch(exc: Exception) {
+                Log.e(TAG, "Use case binding failed", exc)
+            }
+
+        }, ContextCompat.getMainExecutor(this))
+    }
 
     /**
      * This code initializes the camera-related portion of the code, adding listeners to enable
@@ -320,26 +367,8 @@ class RecordingActivity : AppCompatActivity() {
          * User has given permission to use the camera
          */
         else {
-            /**
-             * Find the front camera, crashing if none is available (should never happen, assuming
-             * a reasonably modern device)
-             */
-            var cameraId = ""
+            startCamera()
 
-            for (id in cameraManager.cameraIdList) {
-                val face = cameraManager.getCameraCharacteristics(id)
-                    .get(CameraCharacteristics.LENS_FACING)
-                if (face == CameraSelector.LENS_FACING_FRONT) {
-                    cameraId = id
-                    break
-                }
-            }
-
-            if (cameraId == "") {
-                throw IllegalStateException("No front camera available")
-            }
-
-            camera = openCamera(cameraManager, cameraId, cameraHandler)
 
             /**
              * Don't delete the below code for now, as we can use it to get supported
@@ -358,144 +387,145 @@ class RecordingActivity : AppCompatActivity() {
             } */
 
 
-            /**
-             * Send video feed to both [previewSurface] and [recordingSurface].
-             */
-            val targets = listOf(previewSurface!!, recordingSurface)
-            session = createCaptureSession(camera, targets, cameraHandler)
+//            /**
+//             * Send video feed to both [previewSurface] and [recordingSurface].
+//             */
+//            val targets = listOf(previewSurface!!, recordingSurface)
+//            session = createCaptureSession(camera, targets, cameraHandler)
+//
+//            previewRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
+//                previewSurface?.let {
+//                    addTarget(it)
+//                }
+//            }.build()
+//
+//            session.setRepeatingRequest(previewRequest, null, /* cameraHandler */ null)
 
-            previewRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                previewSurface?.let {
-                    addTarget(it)
-                }
-            }.build()
-
-            session.setRepeatingRequest(previewRequest, null, /* cameraHandler */ null)
+//            val buttonLock = ReentrantLock()
 
             /**
              * Set a listener for when the user presses the record button.
              */
-            recordButton.setOnTouchListener { view, event ->
-                /**
-                 * Do nothing if the record button is disabled.
-                 */
-                if (recordButtonDisabled) {
-                    return@setOnTouchListener false
-                }
-
-                when (event.action) {
-                    /**
-                     * User holds down the record button:
-                     */
-                    MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
-
-                        /**
-                         * Prevents screen rotation during the video recording
-                         */
-                        this@RecordingActivity.requestedOrientation =
-                            ActivityInfo.SCREEN_ORIENTATION_LOCKED
-
-                        /**
-                         * Create a request to record at 30fps.
-                         */
-                        recordRequest = session.device.createCaptureRequest(
-                            CameraDevice.TEMPLATE_RECORD).apply {
-                                previewSurface?.let { addTarget(it) }
-                                addTarget(recordingSurface)
-
-                                set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                                    Range(30, 30))
-                            }.build()
-
-                        session.setRepeatingRequest(recordRequest, null, cameraHandler)
-
-                        prepareRecorder(recorder, recordingSurface)
-
-                        // Finalizes recorder setup and starts recording
-                        recorder.apply {
-                            /**
-                             * The orientation of 270 degrees (-90 degrees) was determined through
-                             * experimentation. For now, we do not need to support other
-                             * orientations than the default portrait orientation.
-                             *
-                             * TODO: Verify validity of this orientation on devices other than the
-                             *       Pixel 5a.
-                             */
-                            setOrientationHint(270)
-                            prepare()
-                            start()
-                        }
-                        recordingStartMillis = System.currentTimeMillis()
-                        Log.d(TAG, "Recording started")
-
-                        // Starts recording animation
-                        // fragmentCameraBinding.overlay.post(animationTask)
-                        /**
-                         * Send haptic feedback for users.
-                         */
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            Log.d(TAG, "Requesting haptic feedback (R+)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        } else {
-                            Log.d(TAG, "Requesting haptic feedback (R-)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
-                            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
-                        }
-
-                        // TODO: Add a recording timer.
-                    }
-
-                    /**
-                     * User releases the record button:
-                     */
-                    MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {
-                        /**
-                         * Ensure the recording is at least [MIN_REQUIRED_RECORDING_TIME_MILLIS]
-                         * milliseconds long (i.e., 1 second), and delay the code to stop recording
-                         * until at least that much time has passed.
-                         */
-                        val elapsedTimeMillis = System.currentTimeMillis() - recordingStartMillis
-                        if (elapsedTimeMillis < MIN_REQUIRED_RECORDING_TIME_MILLIS) {
-                            delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
-                        }
-
-                        Log.d(
-                            TAG, "Recording stopped. Check " +
-                                this@RecordingActivity.getExternalFilesDir(null)?.absolutePath
-                        )
-                        recorder.stop()
-
-                        /**
-                         * Add this recording to the list of recordings for the currently-selected
-                         * word.
-                         */
-                        if (!sessionVideoFiles.containsKey(currentWord)) {
-                            sessionVideoFiles[currentWord] = ArrayList()
-                        }
-
-                        val recordingList = sessionVideoFiles[currentWord]!!
-                        recordingList.add(outputFile)
-
-                        val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
-                        wordPagerAdapter.updateRecordingList()
-
-                        // copyFileToDownloads(this@RecordingActivity, outputFile)
-                        outputFile = createFile(this@RecordingActivity)
-
-                        // Send a haptic feedback on recording end
-                        // delay(100)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            Log.d(TAG, "Requesting haptic feedback (R+)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.REJECT)
-                        } else {
-                            Log.d(TAG, "Requesting haptic feedback (R-)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        }
-                    }
-                }
-
-                true
-            }
+//            recordButton.setOnTouchListener { view, event ->
+//                /**
+//                 * Do nothing if the record button is disabled.
+//                 */
+//                if (recordButtonDisabled) {
+//                    return@setOnTouchListener false
+//                }
+//
+//                when (event.action) {
+//                    /**
+//                     * User holds down the record button:
+//                     */
+//                    MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
+//
+//                        Log.d(TAG, "Record button down")
+//
+//                        buttonLock.withLock {
+//
+//                            Log.d(TAG, "Recording starting")
+//
+//                            /**
+//                             * Prevents screen rotation during the video recording
+//                             */
+//
+//
+//
+////                            /**
+////                             * Create a request to record at 30fps.
+////                             */
+////                            recordRequest = session.device.createCaptureRequest(
+////                                CameraDevice.TEMPLATE_RECORD
+////                            ).apply {
+////                                previewSurface?.let { addTarget(it) }
+////                                addTarget(recordingSurface)
+////
+////                                set(
+////                                    CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+////                                    Range(30, 30)
+////                                )
+////                            }.build()
+////
+////                            session.setRepeatingRequest(recordRequest, null, cameraHandler)
+////
+////                            prepareRecorder(recorder, recordingSurface)
+////
+////                            // Finalizes recorder setup and starts recording
+////                            recorder.setOrientationHint(270)
+////                            recorder.prepare()
+////                            recorder.start()
+////
+////                            recordingStartMillis = System.currentTimeMillis()
+////                            Log.d(TAG, "Recording started")
+//
+//                            // Starts recording animation
+//                            // fragmentCameraBinding.overlay.post(animationTask)
+//                            /**
+//                             * Send haptic feedback for users.
+//                             */
+//                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+//                                Log.d(TAG, "Requesting haptic feedback (R+)")
+//                                recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+//                            } else {
+//                                Log.d(TAG, "Requesting haptic feedback (R-)")
+//                                recordButton.performHapticFeedback(
+//                                    HapticFeedbackConstants.LONG_PRESS,
+//                                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
+//                                )
+//                            }
+//
+//                            // TODO: Add a recording timer.
+//                        }
+//                    }
+//
+//                    /**
+//                     * User releases the record button:
+//                     */
+//                    MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {
+//
+//                        Log.d(TAG, "Record button up")
+//
+//                        buttonLock.withLock {
+//
+//                            Log.d(
+//                                TAG, "Recording stopped. Check " +
+//                                        this@RecordingActivity.getExternalFilesDir(null)?.absolutePath
+//                            )
+//                            recorder.stop()
+//
+//                            /**
+//                             * Add this recording to the list of recordings for the currently-selected
+//                             * word.
+//                             */
+//                            if (!sessionVideoFiles.containsKey(currentWord)) {
+//                                sessionVideoFiles[currentWord] = ArrayList()
+//                            }
+//
+//                            val recordingList = sessionVideoFiles[currentWord]!!
+//                            recordingList.add(outputFile)
+//
+//                            val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
+//                            wordPagerAdapter.updateRecordingList()
+//
+//                            // copyFileToDownloads(this@RecordingActivity, outputFile)
+//                            outputFile = createFile(this@RecordingActivity)
+//
+//                            // Send a haptic feedback on recording end
+//                            // delay(100)
+//                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+//                                Log.d(TAG, "Requesting haptic feedback (R+)")
+//                                recordButton.performHapticFeedback(HapticFeedbackConstants.REJECT)
+//                            } else {
+//                                Log.d(TAG, "Requesting haptic feedback (R-)")
+//                                recordButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+//                            }
+//                        }
+//                    }
+//                }
+//
+//                true
+//            }
         }
     }
 
@@ -578,6 +608,9 @@ class RecordingActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_record)
 
+        context = this
+
+
         outputFile = createFile(this)
 
         // Set up view pager
@@ -646,40 +679,39 @@ class RecordingActivity : AppCompatActivity() {
             }
         })
 
-        cameraView = findViewById(R.id.cameraPreview)
         recordButton = findViewById(R.id.recordButton)
         recordButton.isHapticFeedbackEnabled = true
 
-        // setupCameraCallback()
+        initializeCamera()
     }
 
     private fun setupCameraCallback() {
-        cameraView.holder.addCallback(object: SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                Log.d(TAG,"Initializing surface!")
-                previewSurface = holder.surface
-
-                holder.setFixedSize(1920, 1080)
-                initializeCamera()
-            }
-
-            override fun surfaceChanged(
-                holder: SurfaceHolder,
-                format: Int,
-                width: Int,
-                height: Int
-            ) {
-                Log.d(TAG, "Camera preview surface changed!")
-                // PROBABLY NOT THE BEST IDEA!
+//        viewFinder.holder.addCallback(object: SurfaceHolder.Callback {
+//            override fun surfaceCreated(holder: SurfaceHolder) {
+//                Log.d(TAG,"Initializing surface!")
 //                previewSurface = holder.surface
+//
+//                holder.setFixedSize(1920, 1080)
 //                initializeCamera()
-            }
-
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                Log.d(TAG, "Camera preview surface destroyed!")
-                previewSurface = null
-            }
-        })
+//            }
+//
+//            override fun surfaceChanged(
+//                holder: SurfaceHolder,
+//                format: Int,
+//                width: Int,
+//                height: Int
+//            ) {
+//                Log.d(TAG, "Camera preview surface changed!")
+//                // PROBABLY NOT THE BEST IDEA!
+////                previewSurface = holder.surface
+////                initializeCamera()
+//            }
+//
+//            override fun surfaceDestroyed(holder: SurfaceHolder) {
+//                Log.d(TAG, "Camera preview surface destroyed!")
+//                previewSurface = null
+//            }
+//        })
     }
 
     private var initializedAlready = false
@@ -692,9 +724,10 @@ class RecordingActivity : AppCompatActivity() {
 
         recorder = MediaRecorder()
         recordingSurface = createRecordingSurface()
-
+//
         if (!initializedAlready) {
-            setupCameraCallback()
+            initializeCamera()
+//            setupCameraCallback()
             initializedAlready = true
         }
     }
