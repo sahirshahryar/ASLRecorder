@@ -83,32 +83,15 @@ import java.util.concurrent.Executors
 const val WORDS_PER_SESSION = 5
 
 /**
- * Represents the primary recording activity for ASLRecorder, in which users actually
- * sign ASL words into a camera.
+ * This class handles the recording of ASL into videos.
  *
- * @author  Sahir Shahryar <contact@sahirshahryar.com>
+ * @author  Matthew So <matthew.so@gatech.edu>, Sahir Shahryar <contact@sahirshahryar.com>
  * @since   October 4, 2021
- * @version 1.0.0
+ * @version 1.1.0
  */
 class RecordingActivity : AppCompatActivity() {
 
     private lateinit var context: Context
-
-    /**
-     * Whether or not the application should use the rear camera. The functionality
-     * to switch cameras on-the-fly has not yet been implemented, so this is a constant
-     * that must be set at compile time.
-     *
-     * TODO: Respect this setting.
-     */
-    private val useBackCamera = false
-
-
-    /**
-     * The camera preview.
-     */
-    lateinit var cameraView: SurfaceView
-
 
     /**
      * The button that must be held to record video.
@@ -183,12 +166,12 @@ class RecordingActivity : AppCompatActivity() {
 
 
     /**
-     * The Android service responsible for providing information about the phone's camera setup.
+     * Deprecated: CameraX now used. The Android service responsible for providing information about the phone's camera setup.
      */
-    private val cameraManager: CameraManager by lazy {
-        val context = this.applicationContext
-        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-    }
+//    private val cameraManager: CameraManager by lazy {
+//        val context = this.applicationContext
+//        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+//    }
 
 
     /**
@@ -198,30 +181,29 @@ class RecordingActivity : AppCompatActivity() {
 
 
     /**
-     * The [CaptureRequest] needed to send video data to [previewSurface].
+     * Deprecated: CameraX now used. The [CaptureRequest] needed to send video data to [previewSurface].
      */
-    private lateinit var previewRequest: CaptureRequest
+//    private lateinit var previewRequest: CaptureRequest
 
 
     /**
-     * The [CaptureRequest] needed to send video data to a recording file.
+     * Deprecated: CameraX now used. The [CaptureRequest] needed to send video data to a recording file.
      */
-    private lateinit var recordRequest: CaptureRequest
+//    private lateinit var recordRequest: CaptureRequest
 
 
     /**
+     * Deprecated: CameraX now used.
      * The [File] where the next recording will be stored. The filename contains the word being
      * signed, as well as the date and time of the recording.
-     *
-     * TODO: Delete these files after copying them to the user's photo library.
      */
 //    private lateinit var outputFile: File
 
 
     /**
-     * The media recording service.
+     * Deprecated: CameraX now used. The media recording service.
      */
-    private lateinit var recorder: MediaRecorder
+//    private lateinit var recorder: MediaRecorder
 
 
     /**
@@ -248,9 +230,14 @@ class RecordingActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityRecordBinding
 
-
+    /*
+     * Filename of file currently being recorded.
+     */
     private lateinit var filename: String
 
+    /*
+     * User's UID. Assigned by CCG to each user during recording app deployment.
+     */
     private var UID: String = ""
 
     /**
@@ -363,7 +350,7 @@ class RecordingActivity : AppCompatActivity() {
             /**
              * Set a listener for when the user presses the record button.
              */
-            recordButton.setOnTouchListener { view, event ->
+            recordButton.setOnTouchListener { _, event ->
                 /**
                  * Do nothing if the record button is disabled.
                  */
@@ -420,11 +407,13 @@ class RecordingActivity : AppCompatActivity() {
 
                                         }
                                         Log.d("currRecording", "Recording Finalized")
+                                    } else {
+
                                     }
 
                                 // All events, including VideoRecordEvent.Status, contain RecordingStats.
                                 // This can be used to update the UI or track the recording duration.
-                                val recordingStats = videoRecordEvent.recordingStats
+                                // val recordingStats = videoRecordEvent.recordingStats
                             }})
                         }
                     }
@@ -536,7 +525,6 @@ class RecordingActivity : AppCompatActivity() {
 //            session.close()
             camera.close()
             cameraThread.quitSafely()
-            recorder.release()
         } catch (exc: Throwable) {
             Log.e(TAG, "Error closing camera", exc)
         }
@@ -545,7 +533,6 @@ class RecordingActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraThread.quitSafely()
-        recorder.release()
     }
 
     /**
@@ -680,8 +667,6 @@ class RecordingActivity : AppCompatActivity() {
 
         cameraThread = generateCameraThread()
         cameraHandler = Handler(cameraThread.looper)
-
-        recorder = MediaRecorder()
 //
         if (!initializedAlready) {
             initializeCamera()
@@ -720,9 +705,9 @@ class RecordingActivity : AppCompatActivity() {
     // val finalUri : Uri? = copyFileToDownloads(context, downloadedFile)
 
     fun copyFileToDownloads(context: Context, videoFile: File): Uri? {
-        val resolver = context.contentResolver
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val contentValues = ContentValues().apply {
+                val resolver = context.contentResolver
+                return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val contentValues = ContentValues().apply {
                 put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
                 put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
                 put(MediaStore.MediaColumns.SIZE, videoFile.length())

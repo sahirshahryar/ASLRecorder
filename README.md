@@ -33,9 +33,9 @@ sign language recognition models. Forked from Sahir Shahryar's ASLRecorder: http
 - [x] Easy access to video files (upload? direct file browser?) — **copy to Downloads folder**
   - [x] Upload strategy for videos (upload to Google Photos - preserves file name and uploads automatically), however there is a toggle that must be flipped on in the Google Photos Android
   app to enable automatic uploads. Should be done before shipping devices out.
+- [x] Multiuser support (includes user information in saved files)
 - [x] App asks for camera and storage permission before starting
-- [ ] Support Android 11+ external writing
-- [ ] Hand-off to future developers: comments and documentation
+- [x] Support Android 11+ external writing
 
 
 ## Notes
