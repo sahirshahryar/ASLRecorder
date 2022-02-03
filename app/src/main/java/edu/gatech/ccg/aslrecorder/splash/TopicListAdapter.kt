@@ -24,6 +24,7 @@
  */
 package edu.gatech.ccg.aslrecorder.splash
 
+import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.view.LayoutInflater
@@ -43,7 +44,10 @@ const val RANDOM_SEED = 1L
  */
 class TopicListAdapter: RecyclerView.Adapter<TopicListAdapter.TopicListItem>() {
 
+    var UID: String = ""
+
     class TopicListItem(itemView: View):
+
         RecyclerView.ViewHolder(itemView) {
 
         lateinit var wordList: ArrayList<String>
@@ -51,7 +55,7 @@ class TopicListAdapter: RecyclerView.Adapter<TopicListAdapter.TopicListItem>() {
         lateinit var description: String
 
         fun setData(wordList: ArrayList<String>,
-                    title: String, description: String) {
+                    title: String, description: String, UID: String) {
             this.wordList = wordList
             this.title = title
             this.description = description
@@ -69,6 +73,7 @@ class TopicListAdapter: RecyclerView.Adapter<TopicListAdapter.TopicListItem>() {
                 val recordingActivityIntent = Intent(itemView.context,
                     RecordingActivity::class.java).apply {
                     putStringArrayListExtra("WORDS", wordList)
+                    putExtra("UID", UID)
 
                     if (DISABLE_RANDOM) {
                         putExtra("SEED", RANDOM_SEED)
@@ -99,7 +104,7 @@ class TopicListAdapter: RecyclerView.Adapter<TopicListAdapter.TopicListItem>() {
                 words.addAll(listOf(*wordArray))
             }
             holder.setData(words, "All words",
-                "$WORDS_PER_SESSION random words from any category")
+                "$WORDS_PER_SESSION random words from any category", UID)
         }
 
         /**
@@ -109,7 +114,7 @@ class TopicListAdapter: RecyclerView.Adapter<TopicListAdapter.TopicListItem>() {
             val topic = WordDefinitions.values()[position - 1]
             val wordArray = holder.itemView.context.resources.getStringArray(topic.resourceId)
             words = ArrayList(listOf(*wordArray))
-            holder.setData(words, topic.title, topic.desc)
+            holder.setData(words, topic.title, topic.desc, UID)
         }
     }
 
