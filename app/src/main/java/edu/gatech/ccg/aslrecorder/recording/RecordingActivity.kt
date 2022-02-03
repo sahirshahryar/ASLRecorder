@@ -426,7 +426,6 @@ class RecordingActivity : AppCompatActivity() {
                         Log.d(TAG, "Record button up")
 
                         buttonLock.withLock {
-
                             Log.d(
                                 TAG, "Recording stopped. Check " +
                                         this@RecordingActivity.getExternalFilesDir(null)?.absolutePath
@@ -470,6 +469,10 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+
+    /**
+     * Contains the code to open the requested camera (in this case, the front camera).
+     */
     @SuppressLint("MissingPermission")
     private suspend fun openCamera(
         manager: CameraManager,
@@ -519,6 +522,9 @@ class RecordingActivity : AppCompatActivity() {
 //        }, handler)
 //    }
 
+    /**
+     * When the activity stops, close all open resources.
+     */
     override fun onStop() {
         super.onStop()
         try {
@@ -530,6 +536,10 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+
+    /**
+     * Quit any open threads and release the recorder/surface. (Once again, for good measure)
+     */
     override fun onDestroy() {
         super.onDestroy()
         cameraThread.quitSafely()
@@ -539,8 +549,15 @@ class RecordingActivity : AppCompatActivity() {
      * END BORROWED CODE FROM AOSP.
      */
 
+    /**
+     * Starts a new camera thread. Used when resuming from multitasking.
+     */
     fun generateCameraThread() = HandlerThread("CameraThread").apply { start() }
 
+
+    /**
+     * Setup code for the recording activity.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityRecordBinding.inflate(layoutInflater)
@@ -553,11 +570,13 @@ class RecordingActivity : AppCompatActivity() {
 
 //        outputFile = createFile(this)
 
-        // Set up view pager
         wordPager = findViewById(R.id.wordPager)
 
+        /**
+         * Open up the list of words. This will depend on which set the user clicked on
+         * in the splash screen.
+         */
         val bundle = intent.extras
-
         val fullWordList = if (bundle?.containsKey("WORDS") == true) {
             ArrayList(bundle.getStringArrayList("WORDS"))
         } else {
@@ -566,6 +585,9 @@ class RecordingActivity : AppCompatActivity() {
             ArrayList(listOf(*wordArray))
         }
 
+        /**
+         * Optional debug parameter: using a fixed seed for random selection.
+         */
         val randomSeed = if (bundle?.containsKey("SEED") == true) {
             bundle.getLong("SEED")
         } else {
@@ -586,6 +608,13 @@ class RecordingActivity : AppCompatActivity() {
         // Set title bar text
         title = "1 of ${wordList.size}"
 
+        /**
+         * Set up the cards so that users can swipe back and forth to choose which word
+         * they want to record. Every time the page changes, update value of [currentWord]
+         * and update [outputFile] to have the appropriate file name. Also, update the title
+         * bar and disable/enable the record button if we swipe over to the last card, which
+         * is a summary of the user's recordings.
+         */
         wordPager.adapter = WordPagerAdapter(this, wordList, sessionVideoFiles)
         wordPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -609,13 +638,14 @@ class RecordingActivity : AppCompatActivity() {
 //                    this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
                     title = "${position + 1} of ${wordList.size}"
                 } else {
-                    // Hide record button and move the slider to the front (so users can't
-                    // accidentally press record)
+                    // Hide record button
                     recordButton.animate().apply {
                         alpha(0.0f)
                         duration = 250
                     }.start()
 
+                    // Prevents the button from being clicked or tabbed to, which would
+                    // otherwise be possible even though it is already invisible.
                     recordButton.isClickable = false
                     recordButton.isFocusable = false
                     recordButtonDisabled = true
@@ -660,14 +690,23 @@ class RecordingActivity : AppCompatActivity() {
 //        })
 //    }
 
+    /**
+     * Keeps track of whether
+     */
     private var initializedAlready = false
 
+
+    /**
+     * This code is called when the application is brought to the foreground after multitasking.
+     * Note, however, that it is also called after [onCreate] when the activity is first
+     * initialized. That means that we don't need to paste this code in [onCreate].
+     */
     override fun onResume() {
         super.onResume()
 
         cameraThread = generateCameraThread()
         cameraHandler = Handler(cameraThread.looper)
-//
+
         if (!initializedAlready) {
             initializeCamera()
 //            setupCameraCallback()
@@ -675,18 +714,31 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
-    public fun goToWord(index: Int) {
+
+    /**
+     * Navigates to the given card within the card pager. Used when the user taps on
+     * the video icon next to a word on the very last card.
+     */
+    fun goToWord(index: Int) {
         wordPager.currentItem = index
     }
 
+
+    /**
+     * Deletes a recording.
+     */
     fun deleteRecording(word: String, index: Int) {
         sessionVideoFiles[word]?.removeAt(index)
     }
 
+
+    /**
+     * Copies all recordings into the user's photo library, then exits the recording activity.
+     */
     fun concludeRecordingSession() {
         for (entry in sessionVideoFiles) {
             for (file in entry.value) {
-                copyFileToDownloads(this.applicationContext, file)
+                copyFileToPhotoLibrary(this.applicationContext, file)
             }
         }
 
@@ -695,14 +747,15 @@ class RecordingActivity : AppCompatActivity() {
 
 
     /**
-     * THE CODE BELOW IS COPIED FROM Rubén Viguera at StackOverflow (CC-BY-SA 4.0),
-     * with some modifications.
+     * THE CODE BELOW IS BASED ON CODE BY Rubén Viguera at StackOverflow (CC-BY-SA 4.0),
+     * WITH SOME MODIFICATIONS.
      * See https://stackoverflow.com/a/64357198/13206041.
      */
-    private val DOWNLOAD_DIR = Environment
-        .getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
 
-    // val finalUri : Uri? = copyFileToDownloads(context, downloadedFile)
+    /**
+     * Copies a file to the user's photo library.
+     */
+    fun copyFileToPhotoLibrary(context: Context, videoFile: File): Uri? {
 
     fun copyFileToDownloads(context: Context, videoFile: File): Uri? {
                 val resolver = context.contentResolver
@@ -722,7 +775,8 @@ class RecordingActivity : AppCompatActivity() {
             resolver.openOutputStream(downloadedUri).use { outputStream ->
                 val brr = ByteArray(1024)
                 var len: Int
-                val bufferedInputStream = BufferedInputStream(FileInputStream(videoFile.absoluteFile))
+                val bufferedInputStream =
+                    BufferedInputStream(FileInputStream(videoFile.absoluteFile))
                 while ((bufferedInputStream.read(brr, 0, brr.size).also { len = it }) != -1) {
                     outputStream?.write(brr, 0, len)
                 }
@@ -730,6 +784,8 @@ class RecordingActivity : AppCompatActivity() {
                 bufferedInputStream.close()
             }
         }
+
+        return uri
     }
     /**
      * End borrowed code from Rubén Viguera.

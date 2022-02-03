@@ -36,22 +36,62 @@ import edu.gatech.ccg.aslrecorder.R
 import java.io.File
 import java.lang.ref.WeakReference
 
+/**
+ * Contains the logic for managing the list of recordings, which is shown to
+ * the user after they finish all their recordings.
+ */
 class RecordingListAdapter(wordList: ArrayList<String>,
                            sessionFiles: HashMap<String, ArrayList<File>>,
                            activity: RecordingActivity):
     RecyclerView.Adapter<RecordingListAdapter.RecordingListItem>() {
 
+    /**
+     * The list of words being recorded.
+     */
     val words = wordList
+
+
+    /**
+     * The list of recordings that should be displayed on this page.
+     * This is technically a strong reference to [RecordingActivity.sessionVideoFiles],
+     * which is probably bad practice, but since this adapter only lives while
+     * RecordingActivity itself lives, we should be fine.
+     */
     val recordings = sessionFiles
+
+
+    /**
+     * Get a weak reference to the currently active [RecordingActivity]. In practice,
+     * there's no real reason this needs to be a [WeakReference].
+     */
     val activity = WeakReference(activity)
 
+
+    /**
+     * A list of positions where new words' entries begin within the list of objects in the
+     * [RecyclerView]. For example, if there are two recordings for "hello", one for "world",
+     * and three for "I can't think of another word", then this array would be [0, 3, 5].
+     * (Note that we include a slot for the HEADING for each word, since the header for each
+     * recording takes up an item in the list as well.)
+     */
     val breakpoints = ArrayList<Int>()
+
+
+    /**
+     * The total number of items rendered by the [RecyclerView]
+     */
     var totalSize = 0
 
     init {
+        // Set initial values for the breakpoints array
         updateBreakpoints()
     }
 
+    /**
+     * Update the breakpoints array, which is used to quickly determine the word and index
+     * associated with the recording at a given index within the list. See [breakpoints]
+     * for an example of the values calculated by this function.
+     */
     fun updateBreakpoints(): Int {
         breakpoints.clear()
         breakpoints.add(0)
@@ -68,8 +108,16 @@ class RecordingListAdapter(wordList: ArrayList<String>,
         return totalSize
     }
 
+    /**
+     * Parent class for both section headings and individual recording entries
+     */
     open class RecordingListItem(itemView: View): RecyclerView.ViewHolder(itemView)
 
+    /**
+     * The class that represents the boldfaced label shown above the recordings for a
+     * particular word. The user can press the recording button next to the word's name
+     * to quickly jump to that word.
+     */
     class SectionHeader(itemView: View): RecordingListItem(itemView) {
         fun setData(word: String, paginationIndex: Int,
                     activity: WeakReference<RecordingActivity>) {
@@ -83,6 +131,12 @@ class RecordingListAdapter(wordList: ArrayList<String>,
         }
     }
 
+
+    /**
+     * The class that represents an individual recording. The user can tap the title
+     * of the word to review their recording, or they can press the trash can icon to delete
+     * the recording.
+     */
     class RecordingEntry(itemView: View): RecordingListItem(itemView) {
         fun setData(word: String, recordingIndex: Int, entryPosition: Int,
                     activity: WeakReference<RecordingActivity>,
@@ -90,7 +144,6 @@ class RecordingListAdapter(wordList: ArrayList<String>,
             val label = itemView.findViewById<TextView>(R.id.recordingTitle)
             label.text = "Recording #${recordingIndex + 1}"
 
-            // TODO: Show recording preview when user taps the title
             val deleteButton = itemView.findViewById<ImageButton>(R.id.deleteRecording)
             deleteButton.setOnClickListener {
                 activity.get()?.deleteRecording(word, recordingIndex)
@@ -101,6 +154,8 @@ class RecordingListAdapter(wordList: ArrayList<String>,
                 listAdapter.get()?.notifyDataSetChanged()
             }
 
+            // When we click the title, launch a modal which shows the user that particular
+            // recording.
             label.setOnClickListener {
                 val file = listAdapter.get()?.recordings?.get(word)!![recordingIndex]
 

@@ -36,6 +36,9 @@ sign language recognition models. Forked from Sahir Shahryar's ASLRecorder: http
 - [x] Multiuser support (includes user information in saved files)
 - [x] App asks for camera and storage permission before starting
 - [x] Support Android 11+ external writing
+- [ ] Hand-off to future developers: comments and documentation
+- [ ] Fix the following bugs:
+  - [x] Crashes if you tap the record button very quickly
 
 
 ## Notes
