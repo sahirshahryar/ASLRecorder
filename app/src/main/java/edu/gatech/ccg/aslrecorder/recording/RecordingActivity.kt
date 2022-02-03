@@ -476,14 +476,19 @@ class RecordingActivity : AppCompatActivity() {
                         val recordingList = sessionVideoFiles[currentWord]!!
                         recordingList.add(outputFile)
 
+                        /**
+                         * Update the list of recordings in the card that appears at the end
+                         * of the recording session.
+                         */
                         val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
                         wordPagerAdapter.updateRecordingList()
 
                         // copyFileToDownloads(this@RecordingActivity, outputFile)
                         outputFile = createFile(this@RecordingActivity)
 
-                        // Send a haptic feedback on recording end
-                        // delay(100)
+                        /**
+                         * Send haptic feedback when the recording ends.
+                         */
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                             Log.d(TAG, "Requesting haptic feedback (R+)")
                             recordButton.performHapticFeedback(HapticFeedbackConstants.REJECT)
@@ -499,6 +504,10 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+
+    /**
+     * Contains the code to open the requested camera (in this case, the front camera).
+     */
     @SuppressLint("MissingPermission")
     private suspend fun openCamera(
         manager: CameraManager,
@@ -529,6 +538,11 @@ class RecordingActivity : AppCompatActivity() {
         }, handler)
     }
 
+
+    /**
+     * Create a capture session with the given camera and targets to project to (i.e., the
+     * preview and recording [Surface]s).
+     */
     private suspend fun createCaptureSession(
         device: CameraDevice,
         targets: List<Surface>,
@@ -548,6 +562,10 @@ class RecordingActivity : AppCompatActivity() {
         }, handler)
     }
 
+
+    /**
+     * When the activity stops, close all open resources.
+     */
     override fun onStop() {
         super.onStop()
         try {
@@ -561,6 +579,10 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+
+    /**
+     * Quit any open threads and release the recorder/surface. (Once again, for good measure)
+     */
     override fun onDestroy() {
         super.onDestroy()
         cameraThread.quitSafely()
@@ -572,19 +594,31 @@ class RecordingActivity : AppCompatActivity() {
      * END BORROWED CODE FROM AOSP.
      */
 
+    /**
+     * Starts a new camera thread. Used when resuming from multitasking.
+     */
     fun generateCameraThread() = HandlerThread("CameraThread").apply { start() }
 
+
+    /**
+     * Setup code for the recording activity.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_record)
 
+        /**
+         * Set up the output file for recordings and set up the card-based word pager.
+         */
         outputFile = createFile(this)
 
-        // Set up view pager
         wordPager = findViewById(R.id.wordPager)
 
+        /**
+         * Open up the list of words. This will depend on which set the user clicked on
+         * in the splash screen.
+         */
         val bundle = intent.extras
-
         val fullWordList = if (bundle?.containsKey("WORDS") == true) {
             ArrayList(bundle.getStringArrayList("WORDS"))
         } else {
@@ -593,20 +627,31 @@ class RecordingActivity : AppCompatActivity() {
             ArrayList(listOf(*wordArray))
         }
 
+        /**
+         * Optional debug parameter: using a fixed seed for random selection.
+         */
         val randomSeed = if (bundle?.containsKey("SEED") == true) {
             bundle.getLong("SEED")
         } else {
             null
         }
 
-        Log.d("RECORD",
-            "Choosing $WORDS_PER_SESSION words from a total of ${fullWordList.size}")
+        /**
+         * Choose [WORDS_PER_SESSION] words at random from the list of words.
+         */
         wordList = randomChoice(fullWordList, WORDS_PER_SESSION, randomSeed)
         currentWord = wordList[0]
 
         // Set title bar text
         title = "1 of ${wordList.size}"
 
+        /**
+         * Set up the cards so that users can swipe back and forth to choose which word
+         * they want to record. Every time the page changes, update value of [currentWord]
+         * and update [outputFile] to have the appropriate file name. Also, update the title
+         * bar and disable/enable the record button if we swipe over to the last card, which
+         * is a summary of the user's recordings.
+         */
         wordPager.adapter = WordPagerAdapter(this, wordList, sessionVideoFiles)
         wordPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -630,13 +675,14 @@ class RecordingActivity : AppCompatActivity() {
                     this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
                     title = "${position + 1} of ${wordList.size}"
                 } else {
-                    // Hide record button and move the slider to the front (so users can't
-                    // accidentally press record)
+                    // Hide record button
                     recordButton.animate().apply {
                         alpha(0.0f)
                         duration = 250
                     }.start()
 
+                    // Prevents the button from being clicked or tabbed to, which would
+                    // otherwise be possible even though it is already invisible.
                     recordButton.isClickable = false
                     recordButton.isFocusable = false
                     recordButtonDisabled = true
@@ -646,15 +692,27 @@ class RecordingActivity : AppCompatActivity() {
             }
         })
 
+        /**
+         * Find [cameraView] and [recordButton] in the view, and enable haptic feedback for the
+         * record button.
+         */
         cameraView = findViewById(R.id.cameraPreview)
         recordButton = findViewById(R.id.recordButton)
         recordButton.isHapticFeedbackEnabled = true
-
-        // setupCameraCallback()
     }
 
+
+    /**
+     * Set up the camera. Called from [onResume].
+     */
     private fun setupCameraCallback() {
         cameraView.holder.addCallback(object: SurfaceHolder.Callback {
+
+            /**
+             * Once the [cameraView] has a [Surface] which can be projected to,
+             * set [previewSurface] to that surface, give it a fixed size of
+             * 1080p, and call [initializeCamera].
+             */
             override fun surfaceCreated(holder: SurfaceHolder) {
                 Log.d(TAG,"Initializing surface!")
                 previewSurface = holder.surface
@@ -663,18 +721,23 @@ class RecordingActivity : AppCompatActivity() {
                 initializeCamera()
             }
 
-            override fun surfaceChanged(
-                holder: SurfaceHolder,
-                format: Int,
-                width: Int,
-                height: Int
-            ) {
+
+            /**
+             * Called if the [Surface] corresponding to [cameraView] is changed. For now,
+             * this code doesn't do anything, but that does not seem to cause any issues.
+             */
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int,
+                                        width: Int, height: Int) {
                 Log.d(TAG, "Camera preview surface changed!")
                 // PROBABLY NOT THE BEST IDEA!
-//                previewSurface = holder.surface
-//                initializeCamera()
+                // previewSurface = holder.surface
+                // initializeCamera()
             }
 
+
+            /**
+             * Called if the [Surface] corresponding to [cameraView] is destroyed.
+             */
             override fun surfaceDestroyed(holder: SurfaceHolder) {
                 Log.d(TAG, "Camera preview surface destroyed!")
                 previewSurface = null
@@ -682,8 +745,17 @@ class RecordingActivity : AppCompatActivity() {
         })
     }
 
+    /**
+     * Keeps track of whether
+     */
     private var initializedAlready = false
 
+
+    /**
+     * This code is called when the application is brought to the foreground after multitasking.
+     * Note, however, that it is also called after [onCreate] when the activity is first
+     * initialized. That means that we don't need to paste this code in [onCreate].
+     */
     override fun onResume() {
         super.onResume()
 
@@ -693,24 +765,39 @@ class RecordingActivity : AppCompatActivity() {
         recorder = MediaRecorder()
         recordingSurface = createRecordingSurface()
 
+        // This code is only called when the activity first initializes, not upon
+        // resumption from multitasking.
         if (!initializedAlready) {
             setupCameraCallback()
             initializedAlready = true
         }
     }
 
-    public fun goToWord(index: Int) {
+
+    /**
+     * Navigates to the given card within the card pager. Used when the user taps on
+     * the video icon next to a word on the very last card.
+     */
+    fun goToWord(index: Int) {
         wordPager.currentItem = index
     }
 
+
+    /**
+     * Deletes a recording.
+     */
     fun deleteRecording(word: String, index: Int) {
         sessionVideoFiles[word]?.removeAt(index)
     }
 
+
+    /**
+     * Copies all recordings into the user's photo library, then exits the recording activity.
+     */
     fun concludeRecordingSession() {
         for (entry in sessionVideoFiles) {
             for (file in entry.value) {
-                copyFileToDownloads(this.applicationContext, file)
+                copyFileToPhotoLibrary(this.applicationContext, file)
             }
         }
 
@@ -719,34 +806,32 @@ class RecordingActivity : AppCompatActivity() {
 
 
     /**
-     * THE CODE BELOW IS COPIED FROM Rubén Viguera at StackOverflow (CC-BY-SA 4.0),
-     * with some modifications.
+     * THE CODE BELOW IS BASED ON CODE BY Rubén Viguera at StackOverflow (CC-BY-SA 4.0),
+     * WITH SOME MODIFICATIONS.
      * See https://stackoverflow.com/a/64357198/13206041.
      */
-    private val DOWNLOAD_DIR = Environment
-        .getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
 
-    // val finalUri : Uri? = copyFileToDownloads(context, downloadedFile)
+    /**
+     * Copies a file to the user's photo library.
+     */
+    fun copyFileToPhotoLibrary(context: Context, videoFile: File): Uri? {
 
-    fun copyFileToDownloads(context: Context, videoFile: File): Uri? {
+        // Find the appropriate place to write the video file
         val resolver = context.contentResolver
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
-                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-                put(MediaStore.MediaColumns.SIZE, videoFile.length())
-            }
-            resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
-        } else {
-            val authority = "${context.packageName}.provider"
-            // Modify the line below if we add support for a subfolder within Downloads
-            val destinyFile = File(DOWNLOAD_DIR, videoFile.name)
-            FileProvider.getUriForFile(context, authority, destinyFile)
-        }?.also { downloadedUri ->
-            resolver.openOutputStream(downloadedUri).use { outputStream ->
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+            put(MediaStore.MediaColumns.SIZE, videoFile.length())
+        }
+        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+        // Write to that location.
+        uri?.let {
+            resolver.openOutputStream(uri).use { outputStream ->
                 val brr = ByteArray(1024)
                 var len: Int
-                val bufferedInputStream = BufferedInputStream(FileInputStream(videoFile.absoluteFile))
+                val bufferedInputStream =
+                    BufferedInputStream(FileInputStream(videoFile.absoluteFile))
                 while ((bufferedInputStream.read(brr, 0, brr.size).also { len = it }) != -1) {
                     outputStream?.write(brr, 0, len)
                 }
@@ -754,6 +839,8 @@ class RecordingActivity : AppCompatActivity() {
                 bufferedInputStream.close()
             }
         }
+
+        return uri
     }
     /**
      * End borrowed code from Rubén Viguera.

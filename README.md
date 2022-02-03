@@ -34,6 +34,8 @@ sign language recognition models.
   - [x] Upload strategy for videos (upload to Google Photos - preserves file name and uploads automatically), however there is a toggle that must be flipped on in the Google Photos Android
   app to enable automatic uploads. Should be done before shipping devices out.
 - [ ] Hand-off to future developers: comments and documentation
+- [ ] Fix the following bugs:
+  - [ ] Crashes if you tap the record button very quickly
 
 
 ## Notes

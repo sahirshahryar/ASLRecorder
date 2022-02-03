@@ -97,11 +97,16 @@ fun <T> randomChoice(list: List<T>, count: Int, seed: Long? = null): ArrayList<T
 
     for (i in 1..count) {
         var index: Int
+
+        // Late stages of the selection: pick directly from indices not yet selected
         if (selectingFromNYP) {
             val nypIndex = rand.nextInt(notYetPicked.size)
             index = notYetPicked[nypIndex]
             notYetPicked.removeAt(nypIndex)
-        } else {
+        }
+
+        // Early stages of the selection: select indices at random
+        else {
             do {
                 index = rand.nextInt(list.size)
             } while (pickedSet.contains(index))
@@ -110,6 +115,8 @@ fun <T> randomChoice(list: List<T>, count: Int, seed: Long? = null): ArrayList<T
         pickedSet.add(index)
         pickedList.add(index)
 
+        // Determine whether we need to set selectingFromNYP to true
+        // (have we crossed the threshold?)
         if (i < count && !selectingFromNYP) {
             val ratio = i.toFloat() / list.size
             if (ratio > threshold) {
