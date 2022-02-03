@@ -42,6 +42,8 @@ import android.util.Log
 import android.util.Range
 import android.view.*
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.CameraX
+import androidx.camera.core.Preview
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
@@ -60,40 +62,36 @@ import java.io.FileInputStream
 import java.lang.IllegalStateException
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.locks.Lock
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
+import kotlin.concurrent.withLock
 
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.*
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import edu.gatech.ccg.aslrecorder.databinding.ActivityRecordBinding
+//import kotlinx.android.synthetic.main.activity_record.*
+import java.util.concurrent.Executors
+
 
 const val WORDS_PER_SESSION = 5
 
 /**
- * Represents the primary recording activity for ASLRecorder, in which users actually
- * sign ASL words into a camera.
+ * This class handles the recording of ASL into videos.
  *
- * @author  Sahir Shahryar <contact@sahirshahryar.com>
+ * @author  Matthew So <matthew.so@gatech.edu>, Sahir Shahryar <contact@sahirshahryar.com>
  * @since   October 4, 2021
- * @version 1.0.0
+ * @version 1.1.0
  */
 class RecordingActivity : AppCompatActivity() {
 
-    /**
-     * Whether or not the application should use the rear camera. The functionality
-     * to switch cameras on-the-fly has not yet been implemented, so this is a constant
-     * that must be set at compile time.
-     *
-     * TODO: Respect this setting.
-     */
-    private val useBackCamera = false
-
-
-    /**
-     * The camera preview.
-     */
-    lateinit var cameraView: SurfaceView
-
+    private lateinit var context: Context
 
     /**
      * The button that must be held to record video.
@@ -161,19 +159,19 @@ class RecordingActivity : AppCompatActivity() {
     private lateinit var cameraHandler: Handler
 
 
-    /**
-     * The current recording session, if we are currently capturing video.
-     */
-    private lateinit var session: CameraCaptureSession
+//    /**
+//     * The current recording session, if we are currently capturing video.
+//     */
+//    private lateinit var session: CameraCaptureSession
 
 
     /**
-     * The Android service responsible for providing information about the phone's camera setup.
+     * Deprecated: CameraX now used. The Android service responsible for providing information about the phone's camera setup.
      */
-    private val cameraManager: CameraManager by lazy {
-        val context = this.applicationContext
-        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-    }
+//    private val cameraManager: CameraManager by lazy {
+//        val context = this.applicationContext
+//        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+//    }
 
 
     /**
@@ -183,38 +181,29 @@ class RecordingActivity : AppCompatActivity() {
 
 
     /**
-     * The [CaptureRequest] needed to send video data to [previewSurface].
+     * Deprecated: CameraX now used. The [CaptureRequest] needed to send video data to [previewSurface].
      */
-    private lateinit var previewRequest: CaptureRequest
+//    private lateinit var previewRequest: CaptureRequest
 
 
     /**
-     * The [CaptureRequest] needed to send video data to a recording file.
+     * Deprecated: CameraX now used. The [CaptureRequest] needed to send video data to a recording file.
      */
-    private lateinit var recordRequest: CaptureRequest
+//    private lateinit var recordRequest: CaptureRequest
 
 
     /**
+     * Deprecated: CameraX now used.
      * The [File] where the next recording will be stored. The filename contains the word being
      * signed, as well as the date and time of the recording.
-     *
-     * TODO: Delete these files after copying them to the user's photo library.
      */
-    private lateinit var outputFile: File
+//    private lateinit var outputFile: File
 
 
     /**
-     * The [Surface] (canvas) where video recording data is stored. Essentially, the camera
-     * feed is projected onto this [Surface], and the [MediaRecorder] ([recorder]) reads from
-     * this surface into the MP4 format.
+     * Deprecated: CameraX now used. The media recording service.
      */
-    private lateinit var recordingSurface: Surface
-
-
-    /**
-     * The media recording service.
-     */
-    private lateinit var recorder: MediaRecorder
+//    private lateinit var recorder: MediaRecorder
 
 
     /**
@@ -225,38 +214,31 @@ class RecordingActivity : AppCompatActivity() {
 
 
     /**
-     * Generates a new [Surface] for storing recording data, which will promptly be assigned to
-     * the recordingSurface field above.
+     * Camera executor
      */
-    private fun createRecordingSurface(): Surface {
-        val surface = MediaCodec.createPersistentInputSurface()
-        val recorder = MediaRecorder()
-        prepareRecorder(recorder, surface).apply {
-            prepare()
-            release()
-        }
+    private val cameraExecutor = Executors.newSingleThreadExecutor()
 
-        return surface
-    }
-
-
-    /**
-     * Prepares a [MediaRecorder] using the given surface.
+    /*
+     * CameraX video capture object
      */
-    private fun prepareRecorder(rec: MediaRecorder, surface: Surface)
-            = rec.apply {
-        setVideoSource(MediaRecorder.VideoSource.SURFACE)
-        setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-        setOutputFile(outputFile.absolutePath)
-        setVideoEncodingBitRate(RECORDER_VIDEO_BITRATE)
-        setVideoFrameRate(30)
+    private lateinit var videoCapture: VideoCapture<Recorder>
 
-        // TODO: Device-specific!
-        setVideoSize(1920, 1080)
-        setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-        setInputSurface(surface)
-    }
+    /*
+     * Current recording being recorded
+     */
+    private lateinit var currRecording: Recording
 
+    private lateinit var binding: ActivityRecordBinding
+
+    /*
+     * Filename of file currently being recorded.
+     */
+    private lateinit var filename: String
+
+    /*
+     * User's UID. Assigned by CCG to each user during recording app deployment.
+     */
+    private var UID: String = ""
 
     /**
      * Additional data for recordings.
@@ -272,23 +254,64 @@ class RecordingActivity : AppCompatActivity() {
 
 
         /**
-         * The mimimum recording time is one second.
+         * The minimum recording time is one second.
          */
         private const val MIN_REQUIRED_RECORDING_TIME_MILLIS: Long = 1000L
 
-        /**
-         *  Creates a [File] named with the current date and time
-         */
-        private fun createFile(activity: RecordingActivity): File {
-            // Note that since we require a minimum of one second for recordings,
-            // this date format is guaranteed to produce unique file names.
-            val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss", Locale.US)
-            val currentWord = activity.currentWord
-            return File(activity.applicationContext.filesDir,
-                "${currentWord}-${sdf.format(Date())}.mp4")
-        }
     }
 
+    private fun startCamera() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+
+        cameraProviderFuture.addListener(Runnable {
+            // Used to bind the lifecycle of cameras to the lifecycle owner
+            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+
+            // Preview
+            val preview = Preview.Builder()
+                .build()
+                .also {
+                    it.setSurfaceProvider(binding.viewFinder.surfaceProvider)
+                }
+
+            // Select front camera as a default
+            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+
+            try {
+                // Unbind use cases before rebinding
+                cameraProvider.unbindAll()
+
+                // Bind use cases to camera
+                cameraProvider.bindToLifecycle(
+                    this, cameraSelector, preview)
+
+            } catch(exc: Exception) {
+                Log.e(TAG, "Use case binding failed", exc)
+            }
+
+            // video recording
+
+            val qualitySelector = QualitySelector.fromOrderedList(
+                listOf(Quality.UHD, Quality.FHD, Quality.HD, Quality.SD),
+                FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))
+
+            val recorder = Recorder.Builder()
+                .setExecutor(cameraExecutor).setQualitySelector(qualitySelector)
+                .build()
+
+            videoCapture = VideoCapture.withOutput(recorder)
+
+            try {
+                // Bind use cases to camera
+                cameraProvider.bindToLifecycle(
+                    this, CameraSelector.DEFAULT_FRONT_CAMERA, preview, videoCapture)
+            } catch(exc: Exception) {
+                Log.e(TAG, "Use case binding failed", exc)
+            }
+
+        }, ContextCompat.getMainExecutor(this))
+
+    }
 
     /**
      * This code initializes the camera-related portion of the code, adding listeners to enable
@@ -320,62 +343,14 @@ class RecordingActivity : AppCompatActivity() {
          * User has given permission to use the camera
          */
         else {
-            /**
-             * Find the front camera, crashing if none is available (should never happen, assuming
-             * a reasonably modern device)
-             */
-            var cameraId = ""
+            startCamera()
 
-            for (id in cameraManager.cameraIdList) {
-                val face = cameraManager.getCameraCharacteristics(id)
-                    .get(CameraCharacteristics.LENS_FACING)
-                if (face == CameraSelector.LENS_FACING_FRONT) {
-                    cameraId = id
-                    break
-                }
-            }
-
-            if (cameraId == "") {
-                throw IllegalStateException("No front camera available")
-            }
-
-            camera = openCamera(cameraManager, cameraId, cameraHandler)
-
-            /**
-             * Don't delete the below code for now, as we can use it to get supported
-             * preview resolutions on devices without support for 1080p camera previews.
-             * However, this should not be a problem in most cases.
-             */
-            /*  val characteristics = cameraManager.getCameraCharacteristics(camera.id)
-            val scm = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-            val sizes = scm?.getOutputSizes(SurfaceHolder::class.java)
-
-            if (sizes != null) {
-                for (size in sizes) {
-                    Log.d("SIZE",
-                        "The size ${size.width} x ${size.height} is supported")
-                }
-            } */
-
-
-            /**
-             * Send video feed to both [previewSurface] and [recordingSurface].
-             */
-            val targets = listOf(previewSurface!!, recordingSurface)
-            session = createCaptureSession(camera, targets, cameraHandler)
-
-            previewRequest = session.device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                previewSurface?.let {
-                    addTarget(it)
-                }
-            }.build()
-
-            session.setRepeatingRequest(previewRequest, null, /* cameraHandler */ null)
+            val buttonLock = ReentrantLock()
 
             /**
              * Set a listener for when the user presses the record button.
              */
-            recordButton.setOnTouchListener { view, event ->
+            recordButton.setOnTouchListener { _, event ->
                 /**
                  * Do nothing if the record button is disabled.
                  */
@@ -389,116 +364,106 @@ class RecordingActivity : AppCompatActivity() {
                      */
                     MotionEvent.ACTION_DOWN -> lifecycleScope.launch(Dispatchers.IO) {
 
-                        /**
-                         * Prevents screen rotation during the video recording
-                         */
-                        this@RecordingActivity.requestedOrientation =
-                            ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                        Log.d(TAG, "Record button down")
 
-                        /**
-                         * Create a request to record at 30fps.
-                         */
-                        recordRequest = session.device.createCaptureRequest(
-                            CameraDevice.TEMPLATE_RECORD).apply {
-                                previewSurface?.let { addTarget(it) }
-                                addTarget(recordingSurface)
+                        buttonLock.withLock {
 
-                                set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                                    Range(30, 30))
-                            }.build()
+                            Log.d(TAG, "Recording starting")
 
-                        session.setRepeatingRequest(recordRequest, null, cameraHandler)
-
-                        prepareRecorder(recorder, recordingSurface)
-
-                        // Finalizes recorder setup and starts recording
-                        recorder.apply {
                             /**
-                             * The orientation of 270 degrees (-90 degrees) was determined through
-                             * experimentation. For now, we do not need to support other
-                             * orientations than the default portrait orientation.
-                             *
-                             * TODO: Verify validity of this orientation on devices other than the
-                             *       Pixel 5a.
+                             * Prevents screen rotation during the video recording
                              */
-                            setOrientationHint(270)
-                            prepare()
-                            start()
-                        }
-                        recordingStartMillis = System.currentTimeMillis()
-                        Log.d(TAG, "Recording started")
 
-                        // Starts recording animation
-                        // fragmentCameraBinding.overlay.post(animationTask)
-                        /**
-                         * Send haptic feedback for users.
-                         */
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            Log.d(TAG, "Requesting haptic feedback (R+)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        } else {
-                            Log.d(TAG, "Requesting haptic feedback (R-)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,
-                            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
-                        }
+                            // Create MediaStoreOutputOptions for our recorder
 
-                        // TODO: Add a recording timer.
+                            val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss", Locale.US)
+                            val currentWord = this@RecordingActivity.currentWord
+                            filename = "${UID}-${currentWord}-${sdf.format(Date())}.mp4"
+
+                            val contentValues = ContentValues().apply {
+                                put(MediaStore.Video.Media.DISPLAY_NAME, filename)
+                            }
+                            val mediaStoreOutput = MediaStoreOutputOptions.Builder(super.getContentResolver(),
+                                MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+                                .setContentValues(contentValues)
+                                .build()
+
+                            // 2. Configure Recorder and Start recording to the mediaStoreOutput.
+
+                            currRecording = videoCapture.output
+                                .prepareRecording(context, mediaStoreOutput)
+                                .start(ContextCompat.getMainExecutor(super.getBaseContext()), {videoRecordEvent -> {
+                                    if (videoRecordEvent is VideoRecordEvent.Start) {
+                                        Log.d("currRecording", "Recording Started")
+                                    } else if (videoRecordEvent is VideoRecordEvent.Pause) {
+                                        Log.d("currRecording", "Recording Paused")
+                                    } else if (videoRecordEvent is VideoRecordEvent.Resume) {
+                                        Log.d("currRecording", "Recording Resumed")
+                                    } else if (videoRecordEvent is VideoRecordEvent.Finalize) {
+                                        val finalizeEvent = videoRecordEvent as VideoRecordEvent.Finalize
+                                        // Handles a finalize event for the active recording, checking Finalize.getError()
+                                        val error = finalizeEvent.error
+                                        if (error != VideoRecordEvent.Finalize.ERROR_NONE) {
+
+                                        }
+                                        Log.d("currRecording", "Recording Finalized")
+                                    } else {
+
+                                    }
+
+                                // All events, including VideoRecordEvent.Status, contain RecordingStats.
+                                // This can be used to update the UI or track the recording duration.
+                                // val recordingStats = videoRecordEvent.recordingStats
+                            }})
+                        }
                     }
 
                     /**
                      * User releases the record button:
                      */
                     MotionEvent.ACTION_UP -> lifecycleScope.launch(Dispatchers.IO) {
-                        /**
-                         * Ensure the recording is at least [MIN_REQUIRED_RECORDING_TIME_MILLIS]
-                         * milliseconds long (i.e., 1 second), and delay the code to stop recording
-                         * until at least that much time has passed.
-                         */
-                        val elapsedTimeMillis = System.currentTimeMillis() - recordingStartMillis
-                        if (elapsedTimeMillis < MIN_REQUIRED_RECORDING_TIME_MILLIS) {
-                            delay(MIN_REQUIRED_RECORDING_TIME_MILLIS - elapsedTimeMillis)
-                        }
 
-                        Log.d(
-                            TAG, "Recording stopped. Check " +
-                                this@RecordingActivity.getExternalFilesDir(null)?.absolutePath
-                        )
-                        recorder.stop()
+                        Log.d(TAG, "Record button up")
 
-                        /**
-                         * Add this recording to the list of recordings for the currently-selected
-                         * word.
-                         */
-                        if (!sessionVideoFiles.containsKey(currentWord)) {
-                            sessionVideoFiles[currentWord] = ArrayList()
-                        }
+                        buttonLock.withLock {
+                            Log.d(
+                                TAG, "Recording stopped. Check " +
+                                        this@RecordingActivity.getExternalFilesDir(null)?.absolutePath
+                            )
 
-                        val recordingList = sessionVideoFiles[currentWord]!!
-                        recordingList.add(outputFile)
+                            currRecording.stop()
 
-                        /**
-                         * Update the list of recordings in the card that appears at the end
-                         * of the recording session.
-                         */
-                        val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
-                        wordPagerAdapter.updateRecordingList()
+                            /**
+                             * Add this recording to the list of recordings for the currently-selected
+                             * word.
+                             */
+                            if (!sessionVideoFiles.containsKey(currentWord)) {
+                                sessionVideoFiles[currentWord] = ArrayList()
+                            }
 
-                        // copyFileToDownloads(this@RecordingActivity, outputFile)
-                        outputFile = createFile(this@RecordingActivity)
+                            val recordingList = sessionVideoFiles[currentWord]!!
+                            Log.d("VideoPlayback", MediaStore.Video.Media.getContentUri("external").toString())
+                            val outputFile = File("/storage/emulated/0/Movies/"+filename)
+                            recordingList.add(outputFile)
 
-                        /**
-                         * Send haptic feedback when the recording ends.
-                         */
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            Log.d(TAG, "Requesting haptic feedback (R+)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.REJECT)
-                        } else {
-                            Log.d(TAG, "Requesting haptic feedback (R-)")
-                            recordButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
+                            wordPagerAdapter.updateRecordingList()
+
+                            // copyFileToDownloads(this@RecordingActivity, outputFile)
+                            // outputFile = createFile(this@RecordingActivity)
+
+                            // Send a haptic feedback on recording end
+                            // delay(100)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                Log.d(TAG, "Requesting haptic feedback (R+)")
+                                recordButton.performHapticFeedback(HapticFeedbackConstants.REJECT)
+                            } else {
+                                Log.d(TAG, "Requesting haptic feedback (R-)")
+                                recordButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            }
                         }
                     }
                 }
-
                 true
             }
         }
@@ -538,30 +503,24 @@ class RecordingActivity : AppCompatActivity() {
         }, handler)
     }
 
-
-    /**
-     * Create a capture session with the given camera and targets to project to (i.e., the
-     * preview and recording [Surface]s).
-     */
-    private suspend fun createCaptureSession(
-        device: CameraDevice,
-        targets: List<Surface>,
-        handler: Handler? = null
-    ): CameraCaptureSession = suspendCoroutine { cont ->
-
-        // Creates a capture session using the predefined targets, and defines a session state
-        // callback which resumes the coroutine once the session is configured
-        device.createCaptureSession(targets, object: CameraCaptureSession.StateCallback() {
-            override fun onConfigured(session: CameraCaptureSession) = cont.resume(session)
-
-            override fun onConfigureFailed(session: CameraCaptureSession) {
-                val exc = RuntimeException("Camera ${device.id} session configuration failed")
-                Log.e(TAG, exc.message, exc)
-                // cont.resumeWithException(exc)
-            }
-        }, handler)
-    }
-
+//    private suspend fun createCaptureSession(
+//        device: CameraDevice,
+//        targets: List<Surface>,
+//        handler: Handler? = null
+//    ): CameraCaptureSession = suspendCoroutine { cont ->
+//
+//        // Creates a capture session using the predefined targets, and defines a session state
+//        // callback which resumes the coroutine once the session is configured
+//        device.createCaptureSession(targets, object: CameraCaptureSession.StateCallback() {
+//            override fun onConfigured(session: CameraCaptureSession) = cont.resume(session)
+//
+//            override fun onConfigureFailed(session: CameraCaptureSession) {
+//                val exc = RuntimeException("Camera ${device.id} session configuration failed")
+//                Log.e(TAG, exc.message, exc)
+//                // cont.resumeWithException(exc)
+//            }
+//        }, handler)
+//    }
 
     /**
      * When the activity stops, close all open resources.
@@ -569,11 +528,9 @@ class RecordingActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         try {
-            session.close()
+//            session.close()
             camera.close()
             cameraThread.quitSafely()
-            recorder.release()
-            recordingSurface.release()
         } catch (exc: Throwable) {
             Log.e(TAG, "Error closing camera", exc)
         }
@@ -586,8 +543,6 @@ class RecordingActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraThread.quitSafely()
-        recorder.release()
-        recordingSurface.release()
     }
 
     /**
@@ -605,12 +560,15 @@ class RecordingActivity : AppCompatActivity() {
      */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_record)
+        binding = ActivityRecordBinding.inflate(layoutInflater)
+        val view = binding.root
+        setContentView(view)
 
-        /**
-         * Set up the output file for recordings and set up the card-based word pager.
-         */
-        outputFile = createFile(this)
+//        setContentView(R.layout.activity_record)
+
+        context = this
+
+//        outputFile = createFile(this)
 
         wordPager = findViewById(R.id.wordPager)
 
@@ -636,9 +594,14 @@ class RecordingActivity : AppCompatActivity() {
             null
         }
 
-        /**
-         * Choose [WORDS_PER_SESSION] words at random from the list of words.
-         */
+        this.UID = if (bundle?.containsKey("UID") == true) {
+            bundle.getString("UID").toString()
+        } else {
+            "999"
+        }
+
+        Log.d("RECORD",
+            "Choosing $WORDS_PER_SESSION words from a total of ${fullWordList.size}")
         wordList = randomChoice(fullWordList, WORDS_PER_SESSION, randomSeed)
         currentWord = wordList[0]
 
@@ -672,7 +635,7 @@ class RecordingActivity : AppCompatActivity() {
                     }
 
                     this@RecordingActivity.currentWord = wordList[position]
-                    this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
+//                    this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
                     title = "${position + 1} of ${wordList.size}"
                 } else {
                     // Hide record button
@@ -692,58 +655,40 @@ class RecordingActivity : AppCompatActivity() {
             }
         })
 
-        /**
-         * Find [cameraView] and [recordButton] in the view, and enable haptic feedback for the
-         * record button.
-         */
-        cameraView = findViewById(R.id.cameraPreview)
         recordButton = findViewById(R.id.recordButton)
         recordButton.isHapticFeedbackEnabled = true
+
+        initializeCamera()
     }
 
-
-    /**
-     * Set up the camera. Called from [onResume].
-     */
-    private fun setupCameraCallback() {
-        cameraView.holder.addCallback(object: SurfaceHolder.Callback {
-
-            /**
-             * Once the [cameraView] has a [Surface] which can be projected to,
-             * set [previewSurface] to that surface, give it a fixed size of
-             * 1080p, and call [initializeCamera].
-             */
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                Log.d(TAG,"Initializing surface!")
-                previewSurface = holder.surface
-
-                holder.setFixedSize(1920, 1080)
-                initializeCamera()
-            }
-
-
-            /**
-             * Called if the [Surface] corresponding to [cameraView] is changed. For now,
-             * this code doesn't do anything, but that does not seem to cause any issues.
-             */
-            override fun surfaceChanged(holder: SurfaceHolder, format: Int,
-                                        width: Int, height: Int) {
-                Log.d(TAG, "Camera preview surface changed!")
-                // PROBABLY NOT THE BEST IDEA!
-                // previewSurface = holder.surface
-                // initializeCamera()
-            }
-
-
-            /**
-             * Called if the [Surface] corresponding to [cameraView] is destroyed.
-             */
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                Log.d(TAG, "Camera preview surface destroyed!")
-                previewSurface = null
-            }
-        })
-    }
+//    private fun setupCameraCallback() {
+//        viewFinder.holder.addCallback(object: SurfaceHolder.Callback {
+//            override fun surfaceCreated(holder: SurfaceHolder) {
+//                Log.d(TAG,"Initializing surface!")
+//                previewSurface = holder.surface
+//
+//                holder.setFixedSize(1920, 1080)
+//                initializeCamera()
+//            }
+//
+//            override fun surfaceChanged(
+//                holder: SurfaceHolder,
+//                format: Int,
+//                width: Int,
+//                height: Int
+//            ) {
+//                Log.d(TAG, "Camera preview surface changed!")
+//                // PROBABLY NOT THE BEST IDEA!
+////                previewSurface = holder.surface
+////                initializeCamera()
+//            }
+//
+//            override fun surfaceDestroyed(holder: SurfaceHolder) {
+//                Log.d(TAG, "Camera preview surface destroyed!")
+//                previewSurface = null
+//            }
+//        })
+//    }
 
     /**
      * Keeps track of whether
@@ -762,13 +707,9 @@ class RecordingActivity : AppCompatActivity() {
         cameraThread = generateCameraThread()
         cameraHandler = Handler(cameraThread.looper)
 
-        recorder = MediaRecorder()
-        recordingSurface = createRecordingSurface()
-
-        // This code is only called when the activity first initializes, not upon
-        // resumption from multitasking.
         if (!initializedAlready) {
-            setupCameraCallback()
+            initializeCamera()
+//            setupCameraCallback()
             initializedAlready = true
         }
     }
@@ -816,18 +757,22 @@ class RecordingActivity : AppCompatActivity() {
      */
     fun copyFileToPhotoLibrary(context: Context, videoFile: File): Uri? {
 
-        // Find the appropriate place to write the video file
-        val resolver = context.contentResolver
-        val contentValues = ContentValues().apply {
-            put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-            put(MediaStore.MediaColumns.SIZE, videoFile.length())
-        }
-        val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-        // Write to that location.
-        uri?.let {
-            resolver.openOutputStream(uri).use { outputStream ->
+    fun copyFileToDownloads(context: Context, videoFile: File): Uri? {
+                val resolver = context.contentResolver
+                return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val contentValues = ContentValues().apply {
+                put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
+                put(MediaStore.MediaColumns.SIZE, videoFile.length())
+            }
+            resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, contentValues)
+        } else {
+            val authority = "${context.packageName}.provider"
+            // Modify the line below if we add support for a subfolder within Downloads
+            val destinyFile = File(DOWNLOAD_DIR, videoFile.name)
+            FileProvider.getUriForFile(context, authority, destinyFile)
+        }?.also { downloadedUri ->
+            resolver.openOutputStream(downloadedUri).use { outputStream ->
                 val brr = ByteArray(1024)
                 var len: Int
                 val bufferedInputStream =
