@@ -5,6 +5,14 @@
       <map>
         <entry key="..\:/Users/PrimaryUser/StudioProjects/ASLRecorder/app/src/main/res/layout/activity_record.xml" value="0.1" />
         <entry key="..\:/Users/PrimaryUser/StudioProjects/ASLRecorder/app/src/main/res/layout/permission_error.xml" value="0.203125" />
+        <entry key="app/src/main/res/drawable/rounded_corners.xml" value="0.242" />
+        <entry key="app/src/main/res/drawable/rounded_corners_translucent.xml" value="0.242" />
+        <entry key="app/src/main/res/layout/activity_record.xml" value="0.28575062508770305" />
+        <entry key="app/src/main/res/layout/activity_splash.xml" value="0.2563405797101449" />
+        <entry key="app/src/main/res/layout/activity_splash_revised.xml" value="0.3925210571289063" />
+        <entry key="app/src/main/res/layout/recording_list.xml" value="0.2563405797101449" />
+        <entry key="app/src/main/res/layout/recording_summary.xml" value="0.2563405797101449" />
+        <entry key="app/src/main/res/layout/word_prompt.xml" value="0.2563405797101449" />
       </map>
     </option>
   </component>

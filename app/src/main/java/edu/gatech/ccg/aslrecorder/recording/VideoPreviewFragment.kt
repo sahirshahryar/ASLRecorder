@@ -35,6 +35,7 @@ import androidx.annotation.LayoutRes
 import androidx.fragment.app.DialogFragment
 import edu.gatech.ccg.aslrecorder.R
 import java.io.File
+import java.util.*
 
 class VideoPreviewFragment(@LayoutRes layout: Int): DialogFragment(layout),
      SurfaceHolder.Callback, MediaPlayer.OnPreparedListener {
@@ -47,6 +48,12 @@ class VideoPreviewFragment(@LayoutRes layout: Int): DialogFragment(layout),
 
     lateinit var attemptNumber: String
 
+    private var recordingStartPoint: Long = -1
+
+    private var recordingEndpoint: Long = -1
+
+    private lateinit var timer: Timer
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val recordingPath = arguments?.getString("filename")!!
@@ -54,6 +61,12 @@ class VideoPreviewFragment(@LayoutRes layout: Int): DialogFragment(layout),
 
         val word = arguments?.getString("word")!!
         this.word = word
+
+        val start = arguments?.getLong("start")!!
+        this.recordingStartPoint = start
+
+        val end = arguments?.getLong("end")!!
+        this.recordingEndpoint = end
 
         val attemptNumber = arguments?.getInt("recordingIndex")!! + 1
         this.attemptNumber = "Attempt #$attemptNumber"
@@ -94,7 +107,18 @@ class VideoPreviewFragment(@LayoutRes layout: Int): DialogFragment(layout),
     override fun onPrepared(mp: MediaPlayer?) {
         mp?.let {
             it.isLooping = true
+            it.seekTo(this.recordingStartPoint.toInt())
             it.start()
+
+            val delay = this.recordingEndpoint - this.recordingStartPoint
+            timer.scheduleAtFixedRate(
+                object: TimerTask() {
+                    override fun run() {
+                        this@VideoPreviewFragment.activity?.runOnUiThread {
+                            it.seekTo(this@VideoPreviewFragment.recordingStartPoint.toInt())
+                        }
+                    }
+                }, 0, delay)
         }
     }
 

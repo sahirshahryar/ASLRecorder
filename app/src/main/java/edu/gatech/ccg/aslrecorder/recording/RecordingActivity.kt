@@ -28,6 +28,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
+import android.content.DialogInterface
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -37,10 +38,14 @@ import android.media.MediaRecorder
 import android.net.Uri
 import android.os.*
 import android.provider.MediaStore
+import android.text.InputType
 import androidx.appcompat.app.AppCompatActivity
 import android.util.Log
 import android.util.Range
 import android.view.*
+import android.widget.EditText
+import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.CameraX
 import androidx.camera.core.Preview
@@ -75,9 +80,15 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.recyclerview.widget.LinearLayoutManager
 import edu.gatech.ccg.aslrecorder.databinding.ActivityRecordBinding
+import edu.gatech.ccg.aslrecorder.splash.TopicListAdapter
+import edu.gatech.ccg.aslrecorder.splash.WordDefinitions
+import edu.gatech.ccg.aslrecorder.weightedRandomChoice
+import java.util.Collections.min
 //import kotlinx.android.synthetic.main.activity_record.*
 import java.util.concurrent.Executors
+import kotlin.math.max
 
 
 const val WORDS_PER_SESSION = 5
@@ -85,7 +96,7 @@ const val WORDS_PER_SESSION = 5
 /**
  * This class handles the recording of ASL into videos.
  *
- * @author  Matthew So <matthew.so@gatech.edu>, Sahir Shahryar <contact@sahirshahryar.com>
+ * @author  Sahir Shahryar <contact@sahirshahryar.com>, Matthew So <matthew.so@gatech.edu>
  * @since   October 4, 2021
  * @version 1.1.0
  */
@@ -98,6 +109,13 @@ class RecordingActivity : AppCompatActivity() {
      */
     lateinit var recordButton: FloatingActionButton
 
+
+    /**
+     * A timer that will be shown in the corner
+     */
+    lateinit var countdownTimer: CountDownTimer
+
+    lateinit var countdownText: TextView
 
     /**
      * Whether or not the recording button is disabled. When this is true,
@@ -125,26 +143,7 @@ class RecordingActivity : AppCompatActivity() {
     var currentWord: String = "test"
 
 
-    /**
-     * Map of video recordings the user has taken
-     * key (String) the word being recorded
-     * value (ArrayList<File>) list of recording files for each word
-     */
-    var sessionVideoFiles = HashMap<String, ArrayList<File>>()
-
-    /**
-     * SUBSTANTIAL PORTIONS OF THE BELOW CODE BELOW ARE BORROWED
-     * from the Android Open Source Project (AOSP), WHICH IS LICENSED UNDER THE
-     * Apache 2.0 LICENSE (https://www.apache.org/licenses/LICENSE-2.0). (c) 2020 AOSP.
-     *
-     * SEE https://github.com/android/camera-samples/blob/master/Camera2Video/app/
-     *     src/main/java/com/example/android/camera2/video/fragments/CameraFragment.kt
-     */
-
-    /**
-     * The camera being used for recording.
-     */
-    private lateinit var camera: CameraDevice
+    var sessionTimestamps = HashMap<String, ArrayList<Pair<Long, Long>>>()
 
 
     /**
@@ -158,59 +157,9 @@ class RecordingActivity : AppCompatActivity() {
      */
     private lateinit var cameraHandler: Handler
 
+    private var globalRecordingStartTime: Long = 0L
 
-//    /**
-//     * The current recording session, if we are currently capturing video.
-//     */
-//    private lateinit var session: CameraCaptureSession
-
-
-    /**
-     * Deprecated: CameraX now used. The Android service responsible for providing information about the phone's camera setup.
-     */
-//    private val cameraManager: CameraManager by lazy {
-//        val context = this.applicationContext
-//        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-//    }
-
-
-    /**
-     * A [Surface] (canvas) which is used to show the user a real-time preview of their video feed.
-     */
-    private var previewSurface: Surface? = null
-
-
-    /**
-     * Deprecated: CameraX now used. The [CaptureRequest] needed to send video data to [previewSurface].
-     */
-//    private lateinit var previewRequest: CaptureRequest
-
-
-    /**
-     * Deprecated: CameraX now used. The [CaptureRequest] needed to send video data to a recording file.
-     */
-//    private lateinit var recordRequest: CaptureRequest
-
-
-    /**
-     * Deprecated: CameraX now used.
-     * The [File] where the next recording will be stored. The filename contains the word being
-     * signed, as well as the date and time of the recording.
-     */
-//    private lateinit var outputFile: File
-
-
-    /**
-     * Deprecated: CameraX now used. The media recording service.
-     */
-//    private lateinit var recorder: MediaRecorder
-
-
-    /**
-     * The time at which the current recording started. We use this to ensure that recordings
-     * are at least one second long.
-     */
-    private var recordingStartMillis: Long = 0L
+    private var currentRecordingStartTime: Long = 0L
 
 
     /**
@@ -238,26 +187,13 @@ class RecordingActivity : AppCompatActivity() {
     /*
      * User's UID. Assigned by CCG to each user during recording app deployment.
      */
-    private var UID: String = ""
+    private var uid: String = ""
 
     /**
      * Additional data for recordings.
      */
     companion object {
-        private val TAG = RecordingActivity::class.java.simpleName
-
-        /**
-         * Record video at 15 Mbps. At 1080p30, this level of detail should be more than high
-         * enough.
-         */
-        private const val RECORDER_VIDEO_BITRATE: Int = 15_000_000
-
-
-        /**
-         * The minimum recording time is one second.
-         */
-        private const val MIN_REQUIRED_RECORDING_TIME_MILLIS: Long = 1000L
-
+        private const val TAG = "RecordingActivity"
     }
 
     private fun startCamera() {
@@ -308,6 +244,65 @@ class RecordingActivity : AppCompatActivity() {
             } catch(exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
             }
+
+            val sdf = SimpleDateFormat("yyyy-MM-dd_HH.mm.ss", Locale.US)
+            filename = "${sdf.format(Date())}.mp4"
+
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, filename)
+            }
+            val mediaStoreOutput = MediaStoreOutputOptions.Builder(
+                super.getContentResolver(),
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+            )
+                .setContentValues(contentValues)
+                .build()
+
+            // 2. Configure Recorder and Start recording to the mediaStoreOutput.
+
+            currRecording = videoCapture.output
+                .prepareRecording(context, mediaStoreOutput)
+                .start(ContextCompat.getMainExecutor(super.getBaseContext())) {
+                        videoRecordEvent ->
+                    if (videoRecordEvent is VideoRecordEvent.Start) {
+                        Log.d("currRecording", "Recording Started")
+                    } else if (videoRecordEvent is VideoRecordEvent.Pause) {
+                        Log.d("currRecording", "Recording Paused")
+                    } else if (videoRecordEvent is VideoRecordEvent.Resume) {
+                        Log.d("currRecording", "Recording Resumed")
+                    } else if (videoRecordEvent is VideoRecordEvent.Finalize) {
+                        val finalizeEvent =
+                            videoRecordEvent as VideoRecordEvent.Finalize
+                        // Handles a finalize event for the active recording, checking Finalize.getError()
+                        val error = finalizeEvent.error
+                        if (error != VideoRecordEvent.Finalize.ERROR_NONE) {
+
+                        }
+                        Log.d("currRecording", "Recording Finalized")
+                    }
+
+                    // All events, including VideoRecordEvent.Status, contain RecordingStats.
+                    // This can be used to update the UI or track the recording duration.
+                    // val recordingStats = videoRecordEvent.recordingStats
+                }
+
+            countdownText = findViewById(R.id.timerLabel)
+
+            countdownTimer = object : CountDownTimer(900_000, 1000) {
+                override fun onTick(p0: Long) {
+                    val rawSeconds = (p0 / 1000).toInt() + 1
+                    val minutes = padZeroes(rawSeconds / 60, 2)
+                    val seconds = padZeroes(rawSeconds % 60, 2)
+                    countdownText.text = "$minutes:$seconds"
+                }
+
+                override fun onFinish() {
+                    TODO("Not yet implemented")
+                }
+            }
+
+            countdownTimer.start()
+            globalRecordingStartTime = System.currentTimeMillis()
 
         }, ContextCompat.getMainExecutor(this))
 
@@ -367,54 +362,8 @@ class RecordingActivity : AppCompatActivity() {
                         Log.d(TAG, "Record button down")
 
                         buttonLock.withLock {
-
-                            Log.d(TAG, "Recording starting")
-
-                            /**
-                             * Prevents screen rotation during the video recording
-                             */
-
-                            // Create MediaStoreOutputOptions for our recorder
-
-                            val sdf = SimpleDateFormat("yyyy_MM_dd_HH_mm_ss", Locale.US)
-                            val currentWord = this@RecordingActivity.currentWord
-                            filename = "${UID}-${currentWord}-${sdf.format(Date())}.mp4"
-
-                            val contentValues = ContentValues().apply {
-                                put(MediaStore.Video.Media.DISPLAY_NAME, filename)
-                            }
-                            val mediaStoreOutput = MediaStoreOutputOptions.Builder(super.getContentResolver(),
-                                MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
-                                .setContentValues(contentValues)
-                                .build()
-
-                            // 2. Configure Recorder and Start recording to the mediaStoreOutput.
-
-                            currRecording = videoCapture.output
-                                .prepareRecording(context, mediaStoreOutput)
-                                .start(ContextCompat.getMainExecutor(super.getBaseContext()), {videoRecordEvent -> {
-                                    if (videoRecordEvent is VideoRecordEvent.Start) {
-                                        Log.d("currRecording", "Recording Started")
-                                    } else if (videoRecordEvent is VideoRecordEvent.Pause) {
-                                        Log.d("currRecording", "Recording Paused")
-                                    } else if (videoRecordEvent is VideoRecordEvent.Resume) {
-                                        Log.d("currRecording", "Recording Resumed")
-                                    } else if (videoRecordEvent is VideoRecordEvent.Finalize) {
-                                        val finalizeEvent = videoRecordEvent as VideoRecordEvent.Finalize
-                                        // Handles a finalize event for the active recording, checking Finalize.getError()
-                                        val error = finalizeEvent.error
-                                        if (error != VideoRecordEvent.Finalize.ERROR_NONE) {
-
-                                        }
-                                        Log.d("currRecording", "Recording Finalized")
-                                    } else {
-
-                                    }
-
-                                // All events, including VideoRecordEvent.Status, contain RecordingStats.
-                                // This can be used to update the UI or track the recording duration.
-                                // val recordingStats = videoRecordEvent.recordingStats
-                            }})
+                            currentRecordingStartTime =
+                                System.currentTimeMillis() - globalRecordingStartTime
                         }
                     }
 
@@ -426,35 +375,24 @@ class RecordingActivity : AppCompatActivity() {
                         Log.d(TAG, "Record button up")
 
                         buttonLock.withLock {
-
-                            Log.d(
-                                TAG, "Recording stopped. Check " +
-                                        this@RecordingActivity.getExternalFilesDir(null)?.absolutePath
-                            )
-
-                            currRecording.stop()
-
-                            /**
-                             * Add this recording to the list of recordings for the currently-selected
-                             * word.
-                             */
-                            if (!sessionVideoFiles.containsKey(currentWord)) {
-                                sessionVideoFiles[currentWord] = ArrayList()
+                            val recordingEnd = System.currentTimeMillis() - globalRecordingStartTime
+                            if (!sessionTimestamps.containsKey(currentWord)) {
+                                sessionTimestamps[currentWord] = ArrayList()
                             }
 
-                            val recordingList = sessionVideoFiles[currentWord]!!
-                            Log.d("VideoPlayback", MediaStore.Video.Media.getContentUri("external").toString())
-                            val outputFile = File("/storage/emulated/0/Movies/"+filename)
-                            recordingList.add(outputFile)
+                            sessionTimestamps[currentWord]!!.add(
+                                Pair(currentRecordingStartTime, recordingEnd)
+                            )
+
+                            val recordingCount = sessionTimestamps[currentWord]!!.size
 
                             val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
-                            wordPagerAdapter.updateRecordingList()
 
-                            // copyFileToDownloads(this@RecordingActivity, outputFile)
-                            // outputFile = createFile(this@RecordingActivity)
+                            runOnUiThread {
+                                wordPagerAdapter.updateRecordingList()
+                                wordPagerAdapter.updateRecordingCount(currentWord, recordingCount)
+                            }
 
-                            // Send a haptic feedback on recording end
-                            // delay(100)
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                 Log.d(TAG, "Requesting haptic feedback (R+)")
                                 recordButton.performHapticFeedback(HapticFeedbackConstants.REJECT)
@@ -470,61 +408,12 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private suspend fun openCamera(
-        manager: CameraManager,
-        cameraId: String,
-        handler: Handler? = null
-    ): CameraDevice = suspendCancellableCoroutine { cont ->
-        manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
-            override fun onOpened(device: CameraDevice) = cont.resume(device)
-
-            override fun onDisconnected(device: CameraDevice) {
-                Log.w(TAG, "Camera $cameraId has been disconnected")
-                this@RecordingActivity.finish()
-            }
-
-            override fun onError(device: CameraDevice, error: Int) {
-                val msg = when(error) {
-                    ERROR_CAMERA_DEVICE -> "Fatal (device)"
-                    ERROR_CAMERA_DISABLED -> "Device policy"
-                    ERROR_CAMERA_IN_USE -> "Camera in use"
-                    ERROR_CAMERA_SERVICE -> "Fatal (service)"
-                    ERROR_MAX_CAMERAS_IN_USE -> "Maximum cameras in use"
-                    else -> "Unknown"
-                }
-                val exc = RuntimeException("Camera $cameraId error: ($error) $msg")
-                Log.e(TAG, exc.message, exc)
-                if (cont.isActive) cont.resumeWithException(exc)
-            }
-        }, handler)
-    }
-
-//    private suspend fun createCaptureSession(
-//        device: CameraDevice,
-//        targets: List<Surface>,
-//        handler: Handler? = null
-//    ): CameraCaptureSession = suspendCoroutine { cont ->
-//
-//        // Creates a capture session using the predefined targets, and defines a session state
-//        // callback which resumes the coroutine once the session is configured
-//        device.createCaptureSession(targets, object: CameraCaptureSession.StateCallback() {
-//            override fun onConfigured(session: CameraCaptureSession) = cont.resume(session)
-//
-//            override fun onConfigureFailed(session: CameraCaptureSession) {
-//                val exc = RuntimeException("Camera ${device.id} session configuration failed")
-//                Log.e(TAG, exc.message, exc)
-//                // cont.resumeWithException(exc)
-//            }
-//        }, handler)
-//    }
-
     override fun onStop() {
         super.onStop()
         try {
 //            session.close()
-            camera.close()
-            cameraThread.quitSafely()
+//            camera.close()
+//            cameraThread.quitSafely()
         } catch (exc: Throwable) {
             Log.e(TAG, "Error closing camera", exc)
         }
@@ -547,46 +436,25 @@ class RecordingActivity : AppCompatActivity() {
         val view = binding.root
         setContentView(view)
 
-//        setContentView(R.layout.activity_record)
-
         context = this
-
-//        outputFile = createFile(this)
 
         // Set up view pager
         wordPager = findViewById(R.id.wordPager)
 
-        val bundle = intent.extras
+        val bundle = intent.extras!!
 
-        val fullWordList = if (bundle?.containsKey("WORDS") == true) {
-            ArrayList(bundle.getStringArrayList("WORDS"))
-        } else {
-            // Something has gone wrong if this code ever executes
-            val wordArray = resources.getStringArray(R.array.animals)
-            ArrayList(listOf(*wordArray))
-        }
+        this.uid = bundle.getString("UID", "")!!
 
-        val randomSeed = if (bundle?.containsKey("SEED") == true) {
-            bundle.getLong("SEED")
-        } else {
-            null
-        }
-
-        this.UID = if (bundle?.containsKey("UID") == true) {
-            bundle.getString("UID").toString()
-        } else {
-            "999"
-        }
-
-        Log.d("RECORD",
-            "Choosing $WORDS_PER_SESSION words from a total of ${fullWordList.size}")
-        wordList = randomChoice(fullWordList, WORDS_PER_SESSION, randomSeed)
+        wordList = ArrayList(bundle.getStringArrayList("WORDS")!!)
         currentWord = wordList[0]
 
         // Set title bar text
         title = "1 of ${wordList.size}"
 
-        wordPager.adapter = WordPagerAdapter(this, wordList, sessionVideoFiles)
+        wordPager.adapter = WordPagerAdapter(
+            this, wordList, sessionTimestamps
+        )
+
         wordPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 super.onPageSelected(position)
@@ -631,35 +499,6 @@ class RecordingActivity : AppCompatActivity() {
         initializeCamera()
     }
 
-//    private fun setupCameraCallback() {
-//        viewFinder.holder.addCallback(object: SurfaceHolder.Callback {
-//            override fun surfaceCreated(holder: SurfaceHolder) {
-//                Log.d(TAG,"Initializing surface!")
-//                previewSurface = holder.surface
-//
-//                holder.setFixedSize(1920, 1080)
-//                initializeCamera()
-//            }
-//
-//            override fun surfaceChanged(
-//                holder: SurfaceHolder,
-//                format: Int,
-//                width: Int,
-//                height: Int
-//            ) {
-//                Log.d(TAG, "Camera preview surface changed!")
-//                // PROBABLY NOT THE BEST IDEA!
-////                previewSurface = holder.surface
-////                initializeCamera()
-//            }
-//
-//            override fun surfaceDestroyed(holder: SurfaceHolder) {
-//                Log.d(TAG, "Camera preview surface destroyed!")
-//                previewSurface = null
-//            }
-//        })
-//    }
-
     private var initializedAlready = false
 
     override fun onResume() {
@@ -679,18 +518,29 @@ class RecordingActivity : AppCompatActivity() {
         wordPager.currentItem = index
     }
 
-    fun deleteRecording(word: String, index: Int) {
-        sessionVideoFiles[word]?.removeAt(index)
-    }
-
     fun concludeRecordingSession() {
+        val prefs = getPreferences(MODE_PRIVATE)
+        var recordingIndex = prefs.getInt("RECORDING_INDEX", 0)
         for (entry in sessionVideoFiles) {
             for (file in entry.value) {
-                copyFileToDownloads(this.applicationContext, file)
+                copyFileToDownloads(this.applicationContext, file, entry.key, ++recordingIndex)
+
+                // Delete the copy stored within the app's sandbox
+                file.delete()
             }
         }
 
-        finish()
+        with (prefs.edit()) {
+            putInt("RECORDING_INDEX", recordingIndex)
+            for (entry in sessionVideoFiles) {
+                val key = "RECORDING_COUNT_${entry.key}"
+                val recordingCount = prefs.getInt(key, 0);
+                putInt(key, recordingCount + entry.value.size)
+            }
+            apply()
+        }
+
+
     }
 
 
@@ -704,11 +554,12 @@ class RecordingActivity : AppCompatActivity() {
 
     // val finalUri : Uri? = copyFileToDownloads(context, downloadedFile)
 
-    fun copyFileToDownloads(context: Context, videoFile: File): Uri? {
-                val resolver = context.contentResolver
-                return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val contentValues = ContentValues().apply {
-                put(MediaStore.Video.VideoColumns.DISPLAY_NAME, videoFile.name)
+    fun copyFileToDownloads(context: Context, videoFile: File, word: String, id: Int): Uri? {
+        val resolver = context.contentResolver
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Video.VideoColumns.DISPLAY_NAME,
+                    "${UID}_${padZeroes(id)}_${word}_${videoFile.name}")
                 put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
                 put(MediaStore.MediaColumns.SIZE, videoFile.length())
             }

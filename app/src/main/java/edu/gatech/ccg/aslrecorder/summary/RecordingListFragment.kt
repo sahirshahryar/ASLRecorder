@@ -22,30 +22,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package edu.gatech.ccg.aslrecorder.recording
+package edu.gatech.ccg.aslrecorder.summary
 
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.widget.Button
-import android.widget.TextView
 import androidx.annotation.LayoutRes
-import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import androidx.viewpager2.adapter.FragmentStateAdapter
 import edu.gatech.ccg.aslrecorder.R
-import java.io.File
+import edu.gatech.ccg.aslrecorder.recording.RecordingActivity
 import java.util.ArrayList
 
 class RecordingListFragment(wordList: ArrayList<String>,
-                            sessionFiles: HashMap<String, ArrayList<File>>,
+                            sessionTimestamps: HashMap<String, ArrayList<Pair<Long, Long>>>,
                             activity: RecordingActivity,
                             @LayoutRes layout: Int): Fragment(layout) {
 
     val words = wordList
-    val files = sessionFiles
+    val timestamps = sessionTimestamps
     val recording = activity
 
     var recordingListAdapter: RecordingListAdapter? = null
@@ -54,7 +50,6 @@ class RecordingListFragment(wordList: ArrayList<String>,
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         // super.onViewCreated(view, savedInstanceState)
-        Log.d("HELLO", "onViewCreated!")
         val scrollView = view.findViewById<RecyclerView>(R.id.recordingList)
         scrollView.layoutManager = LinearLayoutManager(this.context)
         recordingListAdapter = RecordingListAdapter(words, files, recording)
@@ -76,7 +71,7 @@ class RecordingListFragment(wordList: ArrayList<String>,
     }
 
     fun determineExitButtonAvailability() {
-        for (entry in files) {
+        for (entry in timestamps) {
             if (entry.value.size > 0) {
                 this.saveButton.isEnabled = true
                 return

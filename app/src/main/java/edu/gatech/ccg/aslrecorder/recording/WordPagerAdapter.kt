@@ -28,18 +28,19 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import edu.gatech.ccg.aslrecorder.R
-import java.io.File
+import edu.gatech.ccg.aslrecorder.summary.RecordingListFragment
 import java.util.ArrayList
 
 class WordPagerAdapter(activity: AppCompatActivity, words: ArrayList<String>,
-                       sessionFiles: HashMap<String, ArrayList<File>>):
+                       recordingTimestamps: HashMap<String, ArrayList<Pair<Long, Long>>>):
     FragmentStateAdapter(activity) {
 
     var recordingActivity = activity as RecordingActivity
 
     var wordList = words
-    var sessionFiles = sessionFiles
+    var recordingTimestamps = recordingTimestamps
 
+    var recordingPrompts = HashMap<String, WordPromptFragment>()
     var recordingListFragment: RecordingListFragment? = null
 
     override fun getItemCount() = wordList.size + 1
@@ -47,17 +48,23 @@ class WordPagerAdapter(activity: AppCompatActivity, words: ArrayList<String>,
     override fun createFragment(position: Int): Fragment {
         return if (position < wordList.size) {
             val word = this.wordList[position]
-            val result = WordPromptFragment(word, R.layout.word_prompt)
-            result
+            if (recordingPrompts.containsKey(word)) {
+                recordingPrompts[word]!!
+            } else {
+                val result = WordPromptFragment(word, R.layout.word_prompt)
+                recordingPrompts[word] = result
+                result
+            }
         } else {
-            recordingListFragment= RecordingListFragment(wordList,
-                sessionFiles, recordingActivity, R.layout.recording_list)
+            recordingListFragment= RecordingListFragment(wordList, recordingTimestamps,
+                recordingActivity, R.layout.recording_list)
             recordingListFragment!!
         }
     }
 
-    fun updateRecordingList() {
-        recordingListFragment?.updateList()
+    fun updateRecordingCount(word: String, count: Int) {
+        recordingPrompts[word]?.updateWordCount(count)
     }
+
 
 }
