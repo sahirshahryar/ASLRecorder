@@ -25,6 +25,7 @@
 package edu.gatech.ccg.aslrecorder.summary
 
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.Button
 import androidx.annotation.LayoutRes
@@ -33,15 +34,17 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import edu.gatech.ccg.aslrecorder.R
 import edu.gatech.ccg.aslrecorder.recording.RecordingActivity
-import java.util.ArrayList
+import edu.gatech.ccg.aslrecorder.recording.RecordingEntryVideo
+import java.util.*
+import kotlin.collections.HashMap
 
 class RecordingListFragment(wordList: ArrayList<String>,
-                            sessionTimestamps: HashMap<String, ArrayList<Pair<Long, Long>>>,
+                            sessionFiles: HashMap<String, ArrayList<RecordingEntryVideo>>,
                             activity: RecordingActivity,
                             @LayoutRes layout: Int): Fragment(layout) {
 
     val words = wordList
-    val timestamps = sessionTimestamps
+    val files = sessionFiles
     val recording = activity
 
     var recordingListAdapter: RecordingListAdapter? = null
@@ -50,6 +53,7 @@ class RecordingListFragment(wordList: ArrayList<String>,
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         // super.onViewCreated(view, savedInstanceState)
+        Log.d("HELLO", "onViewCreated!")
         val scrollView = view.findViewById<RecyclerView>(R.id.recordingList)
         scrollView.layoutManager = LinearLayoutManager(this.context)
         recordingListAdapter = RecordingListAdapter(words, files, recording)
@@ -66,12 +70,14 @@ class RecordingListFragment(wordList: ArrayList<String>,
     fun updateList() {
         recording.runOnUiThread {
             recordingListAdapter?.notifyDataSetChanged()
-            determineExitButtonAvailability()
+            if (this::saveButton.isInitialized) {
+                determineExitButtonAvailability()
+            }
         }
     }
 
     fun determineExitButtonAvailability() {
-        for (entry in timestamps) {
+        for (entry in files) {
             if (entry.value.size > 0) {
                 this.saveButton.isEnabled = true
                 return

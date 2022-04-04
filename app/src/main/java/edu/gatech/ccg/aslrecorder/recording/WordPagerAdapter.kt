@@ -29,18 +29,18 @@ import androidx.fragment.app.Fragment
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import edu.gatech.ccg.aslrecorder.R
 import edu.gatech.ccg.aslrecorder.summary.RecordingListFragment
-import java.util.ArrayList
+import java.util.*
+import kotlin.collections.HashMap
 
 class WordPagerAdapter(activity: AppCompatActivity, words: ArrayList<String>,
-                       recordingTimestamps: HashMap<String, ArrayList<Pair<Long, Long>>>):
+                       sessionFiles: HashMap<String, ArrayList<RecordingEntryVideo>>):
     FragmentStateAdapter(activity) {
 
     var recordingActivity = activity as RecordingActivity
 
     var wordList = words
-    var recordingTimestamps = recordingTimestamps
+    var sessionFiles = sessionFiles
 
-    var recordingPrompts = HashMap<String, WordPromptFragment>()
     var recordingListFragment: RecordingListFragment? = null
 
     override fun getItemCount() = wordList.size + 1
@@ -48,23 +48,17 @@ class WordPagerAdapter(activity: AppCompatActivity, words: ArrayList<String>,
     override fun createFragment(position: Int): Fragment {
         return if (position < wordList.size) {
             val word = this.wordList[position]
-            if (recordingPrompts.containsKey(word)) {
-                recordingPrompts[word]!!
-            } else {
-                val result = WordPromptFragment(word, R.layout.word_prompt)
-                recordingPrompts[word] = result
-                result
-            }
+            val result = WordPromptFragment(word, R.layout.word_prompt)
+            result
         } else {
-            recordingListFragment= RecordingListFragment(wordList, recordingTimestamps,
-                recordingActivity, R.layout.recording_list)
+            recordingListFragment= RecordingListFragment(wordList,
+                sessionFiles, recordingActivity, R.layout.recording_list)
             recordingListFragment!!
         }
     }
 
-    fun updateRecordingCount(word: String, count: Int) {
-        recordingPrompts[word]?.updateWordCount(count)
+    fun updateRecordingList() {
+        recordingListFragment?.updateList()
     }
-
 
 }

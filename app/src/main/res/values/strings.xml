@@ -249,8 +249,8 @@
     </string-array>
     <string-array name="pronouns">
         <!-- Clarify: are he/him/she/her/they/them/you
-             all the same sign? YES - depends on context -->
-        <!-- <item>he</item> -->
+             all the same sign? -->
+        <item>he</item>
         <item>mine / my</item>
         <item>his</item>
         <item>we / us</item>

@@ -25,6 +25,7 @@
 package edu.gatech.ccg.aslrecorder.summary
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -33,20 +34,22 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import edu.gatech.ccg.aslrecorder.R
 import edu.gatech.ccg.aslrecorder.recording.RecordingActivity
+import edu.gatech.ccg.aslrecorder.recording.RecordingEntryVideo
 import edu.gatech.ccg.aslrecorder.recording.VideoPreviewFragment
-import java.io.File
 import java.lang.ref.WeakReference
+import java.time.Duration
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
-class RecordingListAdapter(wordList: ArrayList<String>,
-                           file: File,
-                           timestamps: HashMap<String, ArrayList<Pair<Long, Long>>>,
-                           activity: RecordingSummaryActivity
+class RecordingListAdapter(
+    wordList: ArrayList<String>,
+    sessionFiles: HashMap<String, ArrayList<RecordingEntryVideo>>,
+    activity: RecordingActivity
 ):
     RecyclerView.Adapter<RecordingListAdapter.RecordingListItem>() {
 
     val words = wordList
-    val timestamps = timestamps
-    val file = file
+    val recordings = sessionFiles
     val activity = WeakReference(activity)
 
     val breakpoints = ArrayList<Int>()
@@ -61,20 +64,22 @@ class RecordingListAdapter(wordList: ArrayList<String>,
         breakpoints.add(0)
         var nextIndex = 0
         for (word in words) {
-            nextIndex += 1 + (timestamps[word]?.size ?: 0)
+            nextIndex += 1 + (recordings[word]?.size ?: 0)
             breakpoints.add(nextIndex)
         }
 
         breakpoints.removeAt(breakpoints.size - 1)
         totalSize = nextIndex
 
+        Log.d("HELLO", "Total size = $totalSize")
         return totalSize
     }
 
     open class RecordingListItem(itemView: View): RecyclerView.ViewHolder(itemView)
 
     class SectionHeader(itemView: View): RecordingListItem(itemView) {
-        fun setData(word: String) {
+        fun setData(word: String, paginationIndex: Int,
+                    activity: WeakReference<RecordingActivity>) {
             val label = itemView.findViewById<TextView>(R.id.recordedWord)
             label.text = word
         }
@@ -82,7 +87,7 @@ class RecordingListAdapter(wordList: ArrayList<String>,
 
     class RecordingEntry(itemView: View): RecordingListItem(itemView) {
         fun setData(word: String, recordingIndex: Int, entryPosition: Int,
-                    activity: WeakReference<RecordingSummaryActivity>,
+                    activity: WeakReference<RecordingActivity>,
                     listAdapter: WeakReference<RecordingListAdapter>) {
             val label = itemView.findViewById<TextView>(R.id.recordingTitle)
             label.text = "Recording #${recordingIndex + 1}"
@@ -99,15 +104,16 @@ class RecordingListAdapter(wordList: ArrayList<String>,
             }
 
             label.setOnClickListener {
-                val timestamps = listAdapter.get()?.timestamps?.get(word)!![recordingIndex]
-                val file = listAdapter.get()?.file
+                val entry = listAdapter.get()?.recordings?.get(word)!![recordingIndex]
+
+//                val startTime = listAdapter.get()?.times.g
 
                 val bundle = Bundle()
                 bundle.putString("word", word)
                 bundle.putInt("recordingIndex", recordingIndex)
-                bundle.putString("filename", file?.absolutePath)
-                bundle.putLong("start", timestamps.first)
-                bundle.putLong("end", timestamps.second)
+                bundle.putString("filename", entry.file.absolutePath)
+                bundle.putLong("startTime", Duration.between(entry.videoStart.toInstant(), entry.signStart.toInstant()).toMillis())
+                bundle.putLong("endTime", Duration.between(entry.videoStart.toInstant(), entry.signEnd.toInstant()).toMillis())
 
                 val previewFragment = VideoPreviewFragment(R.layout.recording_preview)
                 previewFragment.arguments = bundle
@@ -136,12 +142,12 @@ class RecordingListAdapter(wordList: ArrayList<String>,
 
     override fun onBindViewHolder(holder: RecordingListItem, position: Int) {
         val decomposedIndex = getWordAndIndex(position)
-
+        Log.d("HELLO", "Binding $position ($decomposedIndex)")
         if (holder is SectionHeader) {
             // First: Index of word in words array
             // Second: words[index] (i.e. the actual word)
             // Third: index of a particular recording inside the array at recordings[word]
-            holder.setData(decomposedIndex.second)
+            holder.setData(decomposedIndex.second, decomposedIndex.first, activity)
         } else if (holder is RecordingEntry) {
             holder.setData(decomposedIndex.second, decomposedIndex.third!!,
                            position, activity, WeakReference(this)
@@ -150,10 +156,12 @@ class RecordingListAdapter(wordList: ArrayList<String>,
     }
 
     override fun getItemCount(): Int {
+        Log.d("HELLO", "totalSize = $totalSize")
         return updateBreakpoints()
     }
 
     override fun getItemViewType(position: Int): Int {
+        Log.d("HELLO", "item view type of  $position")
         val decomposedIndex = getWordAndIndex(position)
         return if (decomposedIndex.third != null) 1 else 0
     }
@@ -169,7 +177,7 @@ class RecordingListAdapter(wordList: ArrayList<String>,
         }
 
         index -= 1
-
+        Log.d("HELLO", "itemIndex: $itemIndex, i:$index, b:$breakpoints, wsize:${words.size}")
         val wordStartingIndex = breakpoints[index]
         val word = words[index]
         var recordingIndex: Int? = null
@@ -178,7 +186,7 @@ class RecordingListAdapter(wordList: ArrayList<String>,
         if (relativeIndex > 0) {
             // It should be logically impossible to access this code unless
             // there is at least one recording for the given word
-            val recordingCount = timestamps[word]!!.size
+            val recordingCount = recordings[word]!!.size
             recordingIndex = recordingCount - relativeIndex
         }
 
