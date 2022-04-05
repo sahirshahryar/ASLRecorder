@@ -261,6 +261,8 @@ class RecordingActivity : AppCompatActivity() {
 
     private lateinit var metadataFilename: String
 
+    private lateinit var countMap: HashMap<String, Int>
+
     /**
      * Additional data for recordings.
      */
@@ -516,13 +518,12 @@ class RecordingActivity : AppCompatActivity() {
                             val wordPagerAdapter = wordPager.adapter as WordPagerAdapter
                             wordPagerAdapter.updateRecordingList()
 
-//                            runOnUiThread(Runnable() {
-//                                fun run() {
-//                                    val currFragment =
-//                                        supportFragmentManager.findFragmentById(wordPager.currentItem) as WordPromptFragment
-//                                    currFragment.updateWordCount(2)
-//                                }
-//                            })
+                            runOnUiThread(Runnable() {
+                                val currFragment =
+                                    supportFragmentManager.findFragmentByTag("f"+wordPager.currentItem) as WordPromptFragment
+                                currFragment.updateWordCount(countMap.getOrDefault(currentWord, 0) + 1)
+                                countMap[currentWord] = countMap.getOrDefault(currentWord, 0) + 1
+                            })
                             // copyFileToDownloads(this@RecordingActivity, outputFile)
                             // outputFile = createFile(this@RecordingActivity)
 
@@ -657,6 +658,8 @@ class RecordingActivity : AppCompatActivity() {
             "999"
         }
 
+        countMap = intent.getSerializableExtra("MAP") as HashMap<String, Int>
+
         Log.d("RECORD",
             "Choosing $WORDS_PER_SESSION words from a total of ${fullWordList.size}")
         wordList = randomChoice(fullWordList, WORDS_PER_SESSION, randomSeed)
@@ -675,6 +678,14 @@ class RecordingActivity : AppCompatActivity() {
                     // Animate the record button back in, if necessary
 
                     this@RecordingActivity.currentWord = wordList[position]
+
+                    runOnUiThread(Runnable() {
+                        val currFragment =
+                            supportFragmentManager.findFragmentByTag("f$position") as WordPromptFragment
+                        currFragment.updateWordCount(countMap.getOrDefault(currentWord, 0) + 1)
+                        countMap[currentWord] = countMap.getOrDefault(currentWord, 0) + 1
+                    })
+
 //                    this@RecordingActivity.outputFile = createFile(this@RecordingActivity)
                     title = "${position + 1} of ${wordList.size}"
                 } else {
