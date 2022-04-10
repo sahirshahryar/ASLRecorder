@@ -111,9 +111,32 @@ class SplashScreenActivity: AppCompatActivity() {
             }
         }
 
+
+
         statsShowableWords.sortWith(
             compareByDescending<Pair<Int, String>> { it.first }.thenBy { it.second }
         )
+
+        if (statsShowableWords[statsShowableWords.lastIndex].first >= NUM_RECORDINGS) {
+            val dialog = this.let {
+                val builder = AlertDialog.Builder(it)
+                builder.setTitle("\uD83C\uDF89 Congratulations, you've finished recording!")
+                builder.setMessage("If you'd like to record more phrases, click the button below.")
+
+                val input = EditText(builder.context)
+                builder.setView(input)
+
+                builder.setPositiveButton("I'd like to keep recording") {
+                        dialog, _ ->
+
+                    dialog.dismiss()
+                }
+
+                builder.create()
+            }
+
+            dialog.show()
+        }
 
         val statsWordCount = min(statsShowableWords.size, 5)
         var wcText = ""
@@ -142,7 +165,7 @@ class SplashScreenActivity: AppCompatActivity() {
         val weights = ArrayList<Float>()
         for (count in recordingCounts) {
 //            weights.add(max(1.0f, totalRecordings.toFloat()) / max(1.0f, count.toFloat()))
-              weights.add(max(1.0f, (NUM_RECORDINGS - count).toFloat() / (NUM_RECORDINGS*wordList.size - totalRecordings).toFloat()))
+            weights.add(max(1.0f, (NUM_RECORDINGS - count).toFloat() / (NUM_RECORDINGS*wordList.size - totalRecordings).toFloat()))
         }
 
         getRandomWords(wordList, weights)
