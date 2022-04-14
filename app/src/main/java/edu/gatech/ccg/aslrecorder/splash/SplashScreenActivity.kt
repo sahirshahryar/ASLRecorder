@@ -73,7 +73,7 @@ class SplashScreenActivity: AppCompatActivity() {
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) {
-            map ->
+                map ->
             if (map[Manifest.permission.CAMERA] == true && map[Manifest.permission.WRITE_EXTERNAL_STORAGE] == true) {
                 // Permission is granted.
                 // You can use the API that requires the permission.
@@ -98,31 +98,31 @@ class SplashScreenActivity: AppCompatActivity() {
         }
 
     private fun setUidAndPermissions() {
-            val dialog = this.let {
-                val builder = AlertDialog.Builder(it)
-                builder.setTitle("Set UID")
-                builder.setMessage("Please enter the UID that you were assigned.")
+        val dialog = this.let {
+            val builder = AlertDialog.Builder(it)
+            builder.setTitle("Set UID")
+            builder.setMessage("Please enter the UID that you were assigned.")
 
-                val input = EditText(builder.context)
-                builder.setView(input)
+            val input = EditText(builder.context)
+            builder.setView(input)
 
-                builder.setPositiveButton("OK") {
-                        dialog, _ ->
-                    this.uid = input.text.toString()
-                    uidBox.text = this.uid
-                    with (globalPrefs.edit()) {
-                        putString("UID", uid)
-                        apply()
-                    }
-
-                    dialog.dismiss()
+            builder.setPositiveButton("OK") {
+                    dialog, _ ->
+                this.uid = input.text.toString()
+                uidBox.text = this.uid
+                with (globalPrefs.edit()) {
+                    putString("UID", uid)
+                    apply()
                 }
 
-                builder.create()
+                dialog.dismiss()
             }
 
-            dialog.setCancelable(false)
-            dialog.show()
+            builder.create()
+        }
+
+        dialog.setCancelable(false)
+        dialog.show()
     }
 
     fun updateCounts() {
@@ -196,7 +196,7 @@ class SplashScreenActivity: AppCompatActivity() {
         weights = ArrayList()
         for (count in recordingCounts) {
 //            weights.add(max(1.0f, totalRecordings.toFloat()) / max(1.0f, count.toFloat()))
-            weights.add(max(1.0f, (NUM_RECORDINGS - count).toFloat() / (NUM_RECORDINGS*wordList.size - totalRecordings).toFloat()))
+            weights.add(min(1.0e-3f, (NUM_RECORDINGS - count).toFloat() / (NUM_RECORDINGS*wordList.size - totalRecordings).toFloat()))
         }
     }
 
@@ -218,7 +218,7 @@ class SplashScreenActivity: AppCompatActivity() {
             // check permissions here
             when {
                 (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED &&
-                 ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) -> {
+                        ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) -> {
                     // You can use the API that requires the permission.
                     var countMap = HashMap<String, Int>()
                     for (word in words) {
@@ -240,31 +240,31 @@ class SplashScreenActivity: AppCompatActivity() {
                 hasRequestedPermission && ((!shouldShowRequestPermissionRationale(Manifest.permission.CAMERA) && (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)) ||
                         !shouldShowRequestPermissionRationale(Manifest.permission.WRITE_EXTERNAL_STORAGE) && (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED)) -> {
 
-                        val text = "Please enable camera and storage access in Settings"
-                        val toast = Toast.makeText(this, text, Toast.LENGTH_LONG)
-                        toast.show()
+                    val text = "Please enable camera and storage access in Settings"
+                    val toast = Toast.makeText(this, text, Toast.LENGTH_LONG)
+                    toast.show()
                 }
                 hasRequestedPermission && ((shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) ||
                         shouldShowRequestPermissionRationale(Manifest.permission.WRITE_EXTERNAL_STORAGE)) -> {
-                        val dialog = this.let {
-                            val builder = AlertDialog.Builder(it)
-                            builder.setTitle("Permissions are required to use the app")
-                            builder.setMessage("In order to record your data, we will need access to the camera and write functionality.")
+                    val dialog = this.let {
+                        val builder = AlertDialog.Builder(it)
+                        builder.setTitle("Permissions are required to use the app")
+                        builder.setMessage("In order to record your data, we will need access to the camera and write functionality.")
 
-                            builder.setPositiveButton("OK") { dialog, _ ->
-                                requestAllPermissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE))
-                                dialog.dismiss()
-                            }
-
-                            builder.create()
-                        }
-                        dialog.setCanceledOnTouchOutside(true);
-                        dialog.setOnCancelListener {
-                            // dialog dismisses
-                            // Do your function here
+                        builder.setPositiveButton("OK") { dialog, _ ->
                             requestAllPermissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE))
+                            dialog.dismiss()
                         }
-                        dialog.show()
+
+                        builder.create()
+                    }
+                    dialog.setCanceledOnTouchOutside(true);
+                    dialog.setOnCancelListener {
+                        // dialog dismisses
+                        // Do your function here
+                        requestAllPermissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE))
+                    }
+                    dialog.show()
 
                 }
                 else -> {
