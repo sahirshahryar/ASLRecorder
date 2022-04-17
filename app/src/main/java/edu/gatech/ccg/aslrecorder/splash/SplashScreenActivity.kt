@@ -30,7 +30,7 @@ import kotlin.math.min
 class SplashScreenActivity: AppCompatActivity() {
 
     object SplashScreenActivity {
-        const val NUM_RECORDINGS = 1
+        const val NUM_RECORDINGS = 10
     }
 
     var uid = ""
