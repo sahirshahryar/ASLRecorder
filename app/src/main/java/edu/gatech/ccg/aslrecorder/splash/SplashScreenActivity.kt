@@ -30,7 +30,7 @@ import kotlin.math.min
 class SplashScreenActivity: AppCompatActivity() {
 
     object SplashScreenActivity {
-        const val NUM_RECORDINGS = 10
+        const val NUM_RECORDINGS = 1
     }
 
     var uid = ""
@@ -56,7 +56,11 @@ class SplashScreenActivity: AppCompatActivity() {
     lateinit var localPrefs: SharedPreferences
 
     lateinit var wordList: ArrayList<String>
-    lateinit var weights: ArrayList<Float>
+
+    var selectableWordList = ArrayList<String>()
+    var selectableWordCounts = ArrayList<Int>()
+
+    var weights = ArrayList<Float>()
 
     lateinit var changeUID: TextView
 
@@ -130,8 +134,23 @@ class SplashScreenActivity: AppCompatActivity() {
         val statsShowableWords = ArrayList<Pair<Int, String>>()
         var totalRecordings = 0
 
+
+        recordingCounts.clear()
+        selectableWordList.clear()
+        selectableWordCounts.clear()
+        weights.clear()
+
+        var finished = 0
         for (word in wordList) {
             val count = localPrefs.getInt("RECORDING_COUNT_$word", 0)
+
+            if (count >= NUM_RECORDINGS) {
+                finished += 1
+            } else {
+                selectableWordList.add(word)
+                selectableWordCounts.add(count)
+            }
+
             recordingCounts.add(count)
             totalRecordings += count
 
@@ -148,7 +167,7 @@ class SplashScreenActivity: AppCompatActivity() {
             compareByDescending<Pair<Int, String>> { it.first }.thenBy { it.second }
         )
 
-        if (statsShowableWords.size > 0 && statsShowableWords[statsShowableWords.lastIndex].first >= NUM_RECORDINGS) {
+        if (finished == wordList.size) {
             val dialog = this.let {
                 val builder = AlertDialog.Builder(it)
                 builder.setTitle("\uD83C\uDF89 Congratulations, you've finished recording!")
@@ -191,12 +210,17 @@ class SplashScreenActivity: AppCompatActivity() {
             statsWordCounts.text = ""
         }
 
-        recordingCount.text = "$totalRecordings total recordings"
+        recordingCount.text = "$totalRecordings total recordings ($finished / ${wordList.size} words done)"
 
         weights = ArrayList()
         for (count in recordingCounts) {
 //            weights.add(max(1.0f, totalRecordings.toFloat()) / max(1.0f, count.toFloat()))
-            weights.add(min(1.0e-3f, (NUM_RECORDINGS - count).toFloat() / (NUM_RECORDINGS*wordList.size - totalRecordings).toFloat()))
+            val weight = if (count < NUM_RECORDINGS) {
+                1.0f
+            } else {
+                1.0f / wordList.size
+            }
+            weights.add(weight)
         }
     }
 

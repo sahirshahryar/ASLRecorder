@@ -142,10 +142,15 @@ fun padZeroes(number: Int, digits: Int = 5): String {
     return "0".repeat(digits - asString.length) + asString
 }
 
-fun <T> weightedRandomChoice(list: List<T>, weights: List<Float>, count: Int,
+fun <T> weightedRandomChoice(list: ArrayList<T>, weights: List<Float>, count: Int,
                              seed: Long? = null): ArrayList<T> {
     Log.d("DEBUG", "weightedRandomChoice elements: [" +
             list.joinToString(", ") + "]")
+    if (count >= list.size) {
+        return list
+    }
+
+    val listCopy = ArrayList(list)
 
     val result = ArrayList<T>()
 
@@ -186,22 +191,41 @@ fun <T> weightedRandomChoice(list: List<T>, weights: List<Float>, count: Int,
 
     for (j in 1..count) {
         val weightedPoint = rand.nextFloat() * sum
-        val correspondingIndex = binarySearchRegion(cumulativeSums, weightedPoint,
-            0, cumulativeSums.size)
+        val correspondingIndex = linearSearchRegion(cumulativeSums, weightedPoint)
 
         val weightData = indexedWeights[correspondingIndex]
         val actualSelectionIndex = weightData.second
-        result.add(list[actualSelectionIndex])
+        result.add(listCopy[actualSelectionIndex])
+
+        for (index in 0 until indexedWeights.size) {
+            val pair = indexedWeights[index]
+            if (pair.second > actualSelectionIndex) {
+                indexedWeights[index] = Pair(pair.first, pair.second - 1)
+                Log.d("DEBUG", "weightedRandomChoice indexedWeights[$index] decremented")
+            }
+        }
 
         // Adjust sums
         for (k in correspondingIndex until cumulativeSums.size) {
             cumulativeSums[k] -= weightData.first
         }
 
+        listCopy.removeAt(actualSelectionIndex)
+        indexedWeights.removeAt(correspondingIndex)
         cumulativeSums.removeAt(correspondingIndex)
     }
 
     return result
+}
+
+fun linearSearchRegion(regions: List<Float>, target: Float): Int {
+    for (i in 1 until regions.size) {
+        if (regions[i] > target) {
+            return i - 1
+        }
+    }
+
+    return regions.size - 1
 }
 
 
