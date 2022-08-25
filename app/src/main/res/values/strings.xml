@@ -72,5 +72,237 @@
         <item>HUNGRY PIG TALK HUNGRY BIRD</item>
         <item>BLACK HORSE DRY WHITE TELEPHONE</item>
     </string-array>
+    <string-array name="full_signs">
+        <item>all</item>
+        <item>another / other</item>
+        <item>any</item>
+        <item>apple</item>
+        <item>asleep</item>
+        <item>aunt</item>
+        <item>awake</item>
+        <item>bad</item>
+        <item>bath</item>
+        <item>bathroom</item>
+        <item>because</item>
+        <item>bed</item>
+        <item>bedroom</item>
+        <item>bee</item>
+        <item>beside / next to</item>
+        <item>better</item>
+        <item>bird</item>
+        <item>black</item>
+        <item>blow</item>
+        <item>blue</item>
+        <item>boy</item>
+        <item>brown</item>
+        <item>bug</item>
+        <item>buttocks</item>
+        <item>bye</item>
+        <item>call (phone)</item>
+        <item>candy</item>
+        <item>camera</item>
+        <item>car</item>
+        <item>carrot</item>
+        <item>cat</item>
+        <item>cereal</item>
+        <item>cheek</item>
+        <item>chicken</item>
+        <item>child</item>
+        <item>chin</item>
+        <item>closet</item>
+        <item>clown</item>
+        <item>cow</item>
+        <item>cowboy</item>
+        <item>cry</item>
+        <item>cut</item>
+        <item>cute</item>
+        <item>dad</item>
+        <item>dirty</item>
+        <item>dog</item>
+        <item>donkey</item>
+        <item>door</item>
+        <item>down</item>
+        <item>drawer</item>
+        <item>drink</item>
+        <item>dry</item>
+        <item>dryer</item>
+        <item>duck</item>
+        <item>ear</item>
+        <item>eat</item>
+        <item>elephant</item>
+        <item>empty</item>
+        <item>eye</item>
+        <item>face</item>
+        <item>farm</item>
+        <item>fireman</item>
+        <item>find</item>
+        <item>fine</item>
+        <item>finish</item>
+        <item>first</item>
+        <item>fish</item>
+        <item>flag</item>
+        <item>food</item>
+        <item>for</item>
+        <item>french fries</item>
+        <item>frog</item>
+        <item>garbage</item>
+        <item>giraffe</item>
+        <item>girl</item>
+        <item>give</item>
+        <item>glass</item>
+        <item>go</item>
+        <item>go potty</item>
+        <item>good</item>
+        <item>goose</item>
+        <item>grandma</item>
+        <item>grandpa</item>
+        <item>grass</item>
+        <item>green</item>
+        <item>gum</item>
+        <item>hair</item>
+        <item>hat</item>
+        <item>hate</item>
+        <item>he / him</item>
+        <item>head</item>
+        <item>hear</item>
+        <item>hen</item>
+        <item>hi / hello</item>
+        <item>high</item>
+        <item>his / hers</item>
+        <item>home</item>
+        <item>horse</item>
+        <item>hot</item>
+        <item>hungry</item>
+        <item>if</item>
+        <item>ice</item>
+        <item>ice cream</item>
+        <item>jump</item>
+        <item>keys</item>
+        <item>kick</item>
+        <item>kitty</item>
+        <item>knee</item>
+        <item>lady</item>
+        <item>lamp</item>
+        <item>later</item>
+        <item>light</item>
+        <item>like</item>
+        <item>lion</item>
+        <item>lip</item>
+        <item>listen</item>
+        <item>look</item>
+        <item>loud</item>
+        <item>mad</item>
+        <item>man</item>
+        <item>milk</item>
+        <item>mom</item>
+        <item>money</item>
+        <item>moon</item>
+        <item>mouse</item>
+        <item>mouth</item>
+        <item>my / mine</item>
+        <item>napkin</item>
+        <item>naughty</item>
+        <item>no / yes</item>
+        <item>noisy</item>
+        <item>nose</item>
+        <item>not</item>
+        <item>nuts</item>
+        <item>off</item>
+        <item>old</item>
+        <item>orange</item>
+        <item>out</item>
+        <item>outside</item>
+        <item>owie</item>
+        <item>party</item>
+        <item>pen</item>
+        <item>penis</item>
+        <item>penny</item>
+        <item>pencil</item>
+        <item>person</item>
+        <item>pick</item>
+        <item>pickle</item>
+        <item>pig</item>
+        <item>pizza</item>
+        <item>plane</item>
+        <item>play</item>
+        <item>please</item>
+        <item>police</item>
+        <item>potty</item>
+        <item>pretend</item>
+        <item>pretty</item>
+        <item>purse</item>
+        <item>puzzle</item>
+        <item>radio</item>
+        <item>rain</item>
+        <item>read</item>
+        <item>red</item>
+        <item>refrigerator</item>
+        <item>sauce</item>
+        <item>sad</item>
+        <item>same</item>
+        <item>say</item>
+        <item>scissors</item>
+        <item>see</item>
+        <item>she / her</item>
+        <item>shh</item>
+        <item>shirt</item>
+        <item>shower</item>
+        <item>sleep</item>
+        <item>sleepy</item>
+        <item>snack</item>
+        <item>snow</item>
+        <item>soup</item>
+        <item>stairs</item>
+        <item>stay</item>
+        <item>sticky</item>
+        <item>store</item>
+        <item>stuck</item>
+        <item>sun</item>
+        <item>talk</item>
+        <item>taste</item>
+        <item>teeth</item>
+        <item>telephone</item>
+        <item>thank you</item>
+        <item>that</item>
+        <item>theirs</item>
+        <item>there</item>
+        <item>they / them</item>
+        <item>think</item>
+        <item>thirsty</item>
+        <item>this</item>
+        <item>those</item>
+        <item>tomorrow</item>
+        <item>tongue</item>
+        <item>toothbrush</item>
+        <item>touch</item>
+        <item>toy</item>
+        <item>trash</item>
+        <item>tree</item>
+        <item>TV</item>
+        <item>uh oh</item>
+        <item>uncle</item>
+        <item>underwear</item>
+        <item>up</item>
+        <item>vacuum</item>
+        <item>wake</item>
+        <item>watch</item>
+        <item>water</item>
+        <item>we / us</item>
+        <item>wet</item>
+        <item>where</item>
+        <item>white</item>
+        <item>who</item>
+        <item>why</item>
+        <item>will</item>
+        <item>wish</item>
+        <item>wolf</item>
+        <item>yellow</item>
+        <item>yesterday</item>
+        <item>yucky</item>
+        <item>you / your</item>
+        <item>yourself</item>
+        <item>zebra</item>
+        <item>zipper</item>
+    </string-array>
     <string name="change_UID"><font color='#0000FF'>(change)</font></string>
 </resources>

@@ -28,8 +28,9 @@ import edu.gatech.ccg.aslrecorder.R
 
 // TODO: Internationalization?
 enum class WordDefinitions(val resourceId: Int, val title: String, val desc: String) {
-    ANIMALS(R.array.copycat_level1, "Animals", "Signs for animals"),
-    FOOD(R.array.copycat_level2, "Food", "Types of food"),
-    HOUSEHOLD(R.array.copycat_level3, "Household", "Household items and furniture"),
-    PEOPLE(R.array.copycat_other_levels, "People", "Signs for relatives and other people"),
+//    ANIMALS(R.array.copycat_level1, "Animals", "Signs for animals"),
+//    FOOD(R.array.copycat_level2, "Food", "Types of food"),
+//    HOUSEHOLD(R.array.copycat_level3, "Household", "Household items and furniture"),
+//    PEOPLE(R.array.copycat_other_levels, "People", "Signs for relatives and other people"),
+    FULL_SET(R.array.full_signs, "All signs", "Complete list of signs")
 }
